@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useState } from 'react'
-import { supabase, getSupabaseAdmin } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/utils/auth'
 import { Category, Product } from '@/types/database'
 import { Plus, Edit, Trash2 } from 'lucide-react'
@@ -248,10 +248,9 @@ export function RestaurantMenu() {
         if (error) throw error
         toast.success('Prodotto aggiornato')
         if (previousImageUrl) {
-          const admin = getSupabaseAdmin()
           const path = extractStoragePath(previousImageUrl)
-          if (admin && path) {
-            const { error: removeError } = await admin.storage.from('restaurant-assets').remove([path])
+          if (path) {
+            const { error: removeError } = await supabase.storage.from('restaurant-assets').remove([path])
             if (removeError) {
               console.warn('Errore nel rimuovere l\'immagine precedente:', removeError)
             }
@@ -314,14 +313,13 @@ export function RestaurantMenu() {
     if (!confirm('Sei sicuro di voler eliminare questo prodotto?')) return
 
     try {
+      const productToDelete = products.find(p => p.id === id)
       const { error } = await supabase.from('products').delete().eq('id', id)
       if (error) throw error
-      const productToDelete = products.find(p => p.id === id)
       if (productToDelete?.image_url) {
-        const admin = getSupabaseAdmin()
         const path = extractStoragePath(productToDelete.image_url)
-        if (admin && path) {
-          const { error: removeError } = await admin.storage.from('restaurant-assets').remove([path])
+        if (path) {
+          const { error: removeError } = await supabase.storage.from('restaurant-assets').remove([path])
           if (removeError) {
             console.warn('Errore nella rimozione dell\'immagine:', removeError)
           }

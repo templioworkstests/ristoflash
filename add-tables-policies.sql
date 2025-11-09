@@ -176,3 +176,28 @@ CREATE POLICY "Admins can manage all waiter calls" ON waiter_calls
       WHERE u.id = auth.uid() AND u.role = 'admin'
     )
   );
+
+
+-- Storage policies: restaurant staff can manage assets in their own folder
+CREATE POLICY "Restaurant staff manage product assets" ON storage.objects
+  FOR ALL USING (
+    bucket_id = 'restaurant-assets'
+    AND auth.role() = 'authenticated'
+    AND EXISTS (
+      SELECT 1
+      FROM public.users u
+      WHERE u.id = auth.uid()
+        AND u.restaurant_id IS NOT NULL
+        AND name LIKE 'products/' || u.restaurant_id::text || '/%'
+    )
+  )
+  WITH CHECK (
+    bucket_id = 'restaurant-assets'
+    AND EXISTS (
+      SELECT 1
+      FROM public.users u
+      WHERE u.id = auth.uid()
+        AND u.restaurant_id IS NOT NULL
+        AND name LIKE 'products/' || u.restaurant_id::text || '/%'
+    )
+  );
