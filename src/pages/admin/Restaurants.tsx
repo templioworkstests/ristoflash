@@ -144,7 +144,7 @@ export function AdminRestaurants() {
       address: restaurant.address || '',
       phone: restaurant.phone || '',
       email: restaurant.email || '',
-      subscription_status: restaurant.subscription_status,
+      subscription_status: restaurant.subscription_status as SubscriptionStatus,
     })
     setShowModal(true)
   }
@@ -166,10 +166,11 @@ export function AdminRestaurants() {
     try {
       toast.loading('Creazione manager in corso...')
 
-      const supabaseAdmin = getSupabaseAdmin()
-      if (!supabaseAdmin) {
+      const adminClient = getSupabaseAdmin()
+      if (!adminClient) {
         throw new Error('Service role key non configurata. Usa il metodo alternativo SQL.')
       }
+      const supabaseAdmin = adminClient
 
       let userId: string
       let isNewUser = false

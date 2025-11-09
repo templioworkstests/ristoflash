@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
-import { Restaurant, Category, Product, Order, OrderItem } from '@/types/database'
+import { Restaurant, Category, Product } from '@/types/database'
 import { ShoppingCart, Plus, Minus, Bell, X, Check } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
@@ -34,6 +34,10 @@ export function CustomerMenu() {
   }, [restaurantId, tableId])
 
   async function loadData() {
+    if (!restaurantId || !tableId) {
+      setLoading(false)
+      return
+    }
     try {
       // Load restaurant
       const { data: restaurantData, error: restaurantError } = await supabase

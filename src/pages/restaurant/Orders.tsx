@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/utils/auth'
-import { Order, OrderItem, Product } from '@/types/database'
-import { CheckCircle, Clock, X } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+
+type Order = import('@/types/database').Order
+type OrderItem = import('@/types/database').OrderItem
+type Product = import('@/types/database').Product
 
 export function RestaurantOrders() {
   const [orders, setOrders] = useState<(Order & { items: OrderItem[]; table_name: string })[]>([])
   const [products, setProducts] = useState<Record<string, Product>>({})
   const [loading, setLoading] = useState(true)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
-  const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
+  const [selectedOrder] = useState<string | null>(null)
 
   useEffect(() => {
     let channel: any = null
@@ -267,7 +269,7 @@ export function RestaurantOrders() {
                           {getStatusLabel(order.status)}
                         </span>
                         <span className="text-sm text-gray-500">
-                          {new Date(order.created_at).toLocaleTimeString('it-IT')}
+                          {order.created_at ? new Date(order.created_at).toLocaleTimeString('it-IT') : ''}
                         </span>
                       </div>
                       {order.notes && (

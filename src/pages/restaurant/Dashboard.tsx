@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/utils/auth'
-import { ShoppingCart, AlertCircle, CheckCircle, Clock } from 'lucide-react'
+import { AlertCircle, CheckCircle, Clock } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
 export function RestaurantDashboard() {
@@ -12,13 +12,11 @@ export function RestaurantDashboard() {
     activeWaiterCalls: 0,
   })
   const [loading, setLoading] = useState(true)
-  const [restaurantId, setRestaurantId] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadData() {
       const user = await getCurrentUser()
       if (user?.restaurant_id) {
-        setRestaurantId(user.restaurant_id)
         fetchStats(user.restaurant_id)
       }
     }

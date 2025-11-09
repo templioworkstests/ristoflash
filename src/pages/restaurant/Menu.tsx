@@ -426,7 +426,7 @@ export function RestaurantMenu() {
                               description: product.description || '',
                               price: product.price.toString(),
                               category_id: product.category_id,
-                              status: product.status,
+                              status: product.status as 'available' | 'unavailable',
                               image_url: product.image_url || '',
                             })
                             setProductImageFile(null)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase, getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { getCurrentUser } from '@/utils/auth'
 import { User } from '@/types/database'
 import { Plus, Edit, Trash2 } from 'lucide-react'

@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/supabase'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -9,13 +10,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 // Reuse a single client across HMR to avoid multiple GoTrueClient instances
 const globalForSupabase = globalThis as unknown as {
-  __supabaseClient?: ReturnType<typeof createClient>
-  __supabaseAdminClient?: ReturnType<typeof createClient>
+  __supabaseClient?: SupabaseClient<Database>
+  __supabaseAdminClient?: SupabaseClient<Database>
 }
 
-export const supabase =
+export const supabase: SupabaseClient<Database> =
   globalForSupabase.__supabaseClient ??
-  createClient(supabaseUrl, supabaseAnonKey, {
+  createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
@@ -30,12 +31,13 @@ if (!globalForSupabase.__supabaseClient) {
 // Service role client (only for server-side operations if needed)
 // WARNING: Exposing service role key in client is a security risk - use only for development!
 // In production, create a Supabase Edge Function or API endpoint
-export const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.SUPABASE_SERVICE_ROLE_KEY
+export const serviceRoleKey =
+  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.SUPABASE_SERVICE_ROLE_KEY
 
 // Admin client factory - creates client only when needed to avoid GoTrueClient conflicts
-let adminClient: ReturnType<typeof createClient> | null = null
+let adminClient: SupabaseClient<Database> | null = null
 
-export function getSupabaseAdmin() {
+export function getSupabaseAdmin(): SupabaseClient<Database> | null {
   if (!serviceRoleKey) return null
   if (globalForSupabase.__supabaseAdminClient) return globalForSupabase.__supabaseAdminClient
   if (adminClient) return adminClient
@@ -47,7 +49,7 @@ export function getSupabaseAdmin() {
     projectScopedStorageKey = `sb-admin-${host}`
   } catch (_) {}
 
-  adminClient = createClient(supabaseUrl, serviceRoleKey, {
+  adminClient = createClient<Database>(supabaseUrl, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

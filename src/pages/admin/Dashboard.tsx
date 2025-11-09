@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Restaurant } from '@/types/database'
 import { Store, Users, ShoppingCart, TrendingUp } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
