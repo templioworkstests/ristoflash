@@ -49,7 +49,7 @@ export function RestaurantMenu() {
     })
   }
 
-  async function optimizeImage(file: File, maxSize = 800, quality = 0.8) {
+  async function optimizeImage(file: File, maxSize = 600, quality = 0.6) {
     const image = await loadImage(file)
     let { width, height } = image
     const scale = Math.min(1, maxSize / Math.max(width, height))
