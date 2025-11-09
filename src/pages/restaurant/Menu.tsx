@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getSupabaseAdmin } from '@/lib/supabase'
 import { getCurrentUser } from '@/utils/auth'
 import { Category, Product } from '@/types/database'
 import { Plus, Edit, Trash2 } from 'lucide-react'
@@ -31,6 +31,55 @@ export function RestaurantMenu() {
     if (url && url.startsWith('blob:')) {
       URL.revokeObjectURL(url)
     }
+  }
+
+  async function loadImage(file: File) {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        resolve(img)
+      }
+      img.onerror = (error) => {
+        URL.revokeObjectURL(url)
+        reject(error)
+      }
+      img.src = url
+    })
+  }
+
+  async function optimizeImage(file: File, maxSize = 800, quality = 0.8) {
+    const image = await loadImage(file)
+    let { width, height } = image
+    const scale = Math.min(1, maxSize / Math.max(width, height))
+
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(width * scale)
+    canvas.height = Math.round(height * scale)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Impossibile elaborare l\'immagine')
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+
+    const blob: Blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (result) => {
+          if (result) resolve(result)
+          else reject(new Error('Elaborazione immagine fallita'))
+        },
+        'image/webp',
+        quality
+      )
+    })
+
+    return { blob, extension: 'webp' as const }
+  }
+
+  function extractStoragePath(url: string) {
+    const marker = '/storage/v1/object/public/restaurant-assets/'
+    const index = url.indexOf(marker)
+    if (index === -1) return null
+    return url.substring(index + marker.length)
   }
 
   useEffect(() => {
@@ -161,15 +210,15 @@ export function RestaurantMenu() {
 
     try {
       let imageUrl = productForm.image_url?.trim() ? productForm.image_url.trim() : null
+      let previousImageUrl: string | null = null
 
       if (productImageFile && restaurantId) {
-        const fileExt = productImageFile.name.split('.').pop()
-        const sanitizedExt = fileExt ? fileExt.toLowerCase() : 'jpg'
-        const filePath = `products/${restaurantId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${sanitizedExt}`
+        const { blob, extension } = await optimizeImage(productImageFile)
+        const filePath = `products/${restaurantId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`
 
         const { error: uploadError } = await supabase.storage
           .from('restaurant-assets')
-          .upload(filePath, productImageFile, { upsert: true })
+          .upload(filePath, blob, { upsert: true, contentType: blob.type })
 
         if (uploadError) throw uploadError
 
@@ -178,6 +227,9 @@ export function RestaurantMenu() {
           .getPublicUrl(filePath)
 
         imageUrl = publicUrlData.publicUrl
+        if (editingProduct?.image_url && editingProduct.image_url !== imageUrl) {
+          previousImageUrl = editingProduct.image_url
+        }
       }
 
       if (editingProduct) {
@@ -195,6 +247,16 @@ export function RestaurantMenu() {
 
         if (error) throw error
         toast.success('Prodotto aggiornato')
+        if (previousImageUrl) {
+          const admin = getSupabaseAdmin()
+          const path = extractStoragePath(previousImageUrl)
+          if (admin && path) {
+            const { error: removeError } = await admin.storage.from('restaurant-assets').remove([path])
+            if (removeError) {
+              console.warn('Errore nel rimuovere l\'immagine precedente:', removeError)
+            }
+          }
+        }
       } else {
         const maxOrder = products.filter(p => p.category_id === productForm.category_id).length
         const { error } = await supabase
@@ -254,6 +316,17 @@ export function RestaurantMenu() {
     try {
       const { error } = await supabase.from('products').delete().eq('id', id)
       if (error) throw error
+      const productToDelete = products.find(p => p.id === id)
+      if (productToDelete?.image_url) {
+        const admin = getSupabaseAdmin()
+        const path = extractStoragePath(productToDelete.image_url)
+        if (admin && path) {
+          const { error: removeError } = await admin.storage.from('restaurant-assets').remove([path])
+          if (removeError) {
+            console.warn('Errore nella rimozione dell\'immagine:', removeError)
+          }
+        }
+      }
       toast.success('Prodotto eliminato')
       if (restaurantId) {
         fetchProducts(restaurantId)
@@ -267,8 +340,8 @@ export function RestaurantMenu() {
     const file = event.target.files?.[0]
     if (!file) return
 
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Immagine troppo grande (max 2MB)')
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error('Immagine troppo grande (max 8MB)')
       event.target.value = ''
       return
     }
@@ -598,7 +671,7 @@ export function RestaurantMenu() {
                     onChange={handleProductImageChange}
                     className="mt-2 w-full text-sm"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Max 2 MB. Formati consigliati: JPG o PNG.</p>
+                  <p className="text-xs text-gray-500 mt-1">Max 8 MB. Formati consigliati: JPG o PNG.</p>
                 </div>
               </div>
               <div className="mt-6 flex justify-end space-x-3">
