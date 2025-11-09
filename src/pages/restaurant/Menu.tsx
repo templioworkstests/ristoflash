@@ -340,12 +340,6 @@ export function RestaurantMenu() {
     const file = event.target.files?.[0]
     if (!file) return
 
-    if (file.size > 8 * 1024 * 1024) {
-      toast.error('Immagine troppo grande (max 8MB)')
-      event.target.value = ''
-      return
-    }
-
     revokePreview(productImagePreview)
     setProductImageFile(file)
     setProductImagePreview(URL.createObjectURL(file))
