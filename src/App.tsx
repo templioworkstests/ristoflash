@@ -10,6 +10,9 @@ import { RestaurantDashboard } from './pages/restaurant/Dashboard'
 import { RestaurantMenu } from './pages/restaurant/Menu'
 import { RestaurantTables } from './pages/restaurant/Tables'
 import { RestaurantOrders } from './pages/restaurant/Orders'
+import { RestaurantKitchen } from './pages/restaurant/Kitchen'
+import { RestaurantPayments } from './pages/restaurant/Payments'
+import { RestaurantAnalytics } from './pages/restaurant/Analytics'
 import { RestaurantStaff } from './pages/restaurant/Staff'
 import { CustomerMenu } from './pages/customer/Menu'
 import { Unauthorized } from './pages/Unauthorized'
@@ -48,16 +51,75 @@ function App() {
         <Route
           path="/restaurant"
           element={
-            <ProtectedRoute allowedRoles={['restaurant_manager', 'staff']}>
+            <ProtectedRoute allowedRoles={['restaurant_manager', 'staff', 'kitchen']}>
               <RestaurantLayout />
             </ProtectedRoute>
           }
         >
-          <Route index element={<RestaurantDashboard />} />
-          <Route path="menu" element={<RestaurantMenu />} />
-          <Route path="tables" element={<RestaurantTables />} />
-          <Route path="orders" element={<RestaurantOrders />} />
-          <Route path="staff" element={<RestaurantStaff />} />
+          <Route
+            index
+            element={
+              <ProtectedRoute allowedRoles={['restaurant_manager', 'staff']}>
+                <RestaurantDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="menu"
+            element={
+              <ProtectedRoute allowedRoles={['restaurant_manager', 'staff']}>
+                <RestaurantMenu />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="tables"
+            element={
+              <ProtectedRoute allowedRoles={['restaurant_manager', 'staff']}>
+                <RestaurantTables />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="orders"
+            element={
+              <ProtectedRoute allowedRoles={['restaurant_manager', 'staff']}>
+                <RestaurantOrders />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="kitchen"
+            element={
+              <ProtectedRoute allowedRoles={['restaurant_manager', 'staff', 'kitchen']}>
+                <RestaurantKitchen />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="payments"
+            element={
+              <ProtectedRoute allowedRoles={['restaurant_manager', 'staff']}>
+                <RestaurantPayments />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="analytics"
+            element={
+              <ProtectedRoute allowedRoles={['restaurant_manager', 'staff']}>
+                <RestaurantAnalytics />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="staff"
+            element={
+              <ProtectedRoute allowedRoles={['restaurant_manager']}>
+                <RestaurantStaff />
+              </ProtectedRoute>
+            }
+          />
         </Route>
         
         {/* Default redirect */}

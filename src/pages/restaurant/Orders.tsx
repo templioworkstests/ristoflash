@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/utils/auth'
 import { toast } from 'react-hot-toast'
@@ -7,12 +8,17 @@ type Order = import('@/types/database').Order
 type OrderItem = import('@/types/database').OrderItem
 type Product = import('@/types/database').Product
 
+type RestaurantOrder = Order & { items: OrderItem[]; table_name: string }
+
 export function RestaurantOrders() {
-  const [orders, setOrders] = useState<(Order & { items: OrderItem[]; table_name: string })[]>([])
+  const [orders, setOrders] = useState<RestaurantOrder[]>([])
   const [products, setProducts] = useState<Record<string, Product>>({})
   const [loading, setLoading] = useState(true)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
   const [selectedOrder] = useState<string | null>(null)
+  const [isPaymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [paymentOrder, setPaymentOrder] = useState<RestaurantOrder | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash')
 
   useEffect(() => {
     let channel: any = null
@@ -91,7 +97,7 @@ export function RestaurantOrders() {
         .from('orders')
         .select('*')
         .eq('restaurant_id', restId)
-        .in('status', ['pending', 'preparing', 'ready'])
+        .in('status', ['pending', 'preparing', 'ready', 'served'])
         .order('created_at', { ascending: false })
 
       if (ordersError) throw ordersError
@@ -167,11 +173,24 @@ export function RestaurantOrders() {
     oscillator.stop(audioContext.currentTime + 0.5)
   }
 
-  async function updateOrderStatus(orderId: string, status: 'pending' | 'preparing' | 'ready' | 'served' | 'paid') {
+  async function updateOrderStatus(
+    orderId: string,
+    status: 'pending' | 'preparing' | 'ready' | 'served' | 'paid',
+    paymentMethod?: 'cash' | 'card'
+  ) {
     try {
+      const payload: Record<string, any> = {
+        status,
+        updated_at: new Date().toISOString(),
+      }
+
+      if (status === 'paid' && paymentMethod) {
+        payload.payment_method = paymentMethod
+      }
+
       const { error } = await supabase
         .from('orders')
-        .update({ status, updated_at: new Date().toISOString() })
+        .update(payload)
         .eq('id', orderId)
 
       if (error) throw error
@@ -191,8 +210,14 @@ export function RestaurantOrders() {
     }
   }
 
-  async function markAsPaid(orderId: string) {
-    await updateOrderStatus(orderId, 'paid')
+  async function markAsPaid(orderId: string, method: 'cash' | 'card' = 'cash') {
+    await updateOrderStatus(orderId, 'paid', method)
+  }
+
+  function openPaymentModal(order: RestaurantOrder) {
+    setPaymentOrder(order)
+    setPaymentMethod('cash')
+    setPaymentModalOpen(true)
   }
 
   function getStatusColor(status: string) {
@@ -204,7 +229,7 @@ export function RestaurantOrders() {
       case 'ready':
         return 'bg-green-100 text-green-800'
       case 'served':
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-purple-100 text-purple-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }
@@ -217,9 +242,9 @@ export function RestaurantOrders() {
       case 'preparing':
         return 'In preparazione'
       case 'ready':
-        return 'Pronto'
+        return 'Pronto per consegna'
       case 'served':
-        return 'Servito'
+        return 'Consegnato al tavolo'
       case 'paid':
         return 'Pagato'
       default:
@@ -235,6 +260,47 @@ export function RestaurantOrders() {
     return acc
   }, {} as Record<string, typeof orders>)
 
+  async function closeTable(tableId: string) {
+    if (!restaurantId) return
+
+    const tableOrders = groupedOrders[tableId] || []
+    const orderIds = tableOrders.map(order => order.id)
+
+    if (orderIds.length === 0) {
+      toast.dismiss()
+      toast.success('Tavolo già libero')
+      return
+    }
+
+    try {
+      const { error: ordersError } = await supabase
+        .from('orders')
+        .update({ status: 'paid', updated_at: new Date().toISOString(), payment_method: 'cash' })
+        .in('id', orderIds)
+
+      if (ordersError) throw ordersError
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .update({ status: 'paid' })
+        .in('order_id', orderIds)
+
+      if (itemsError) throw itemsError
+
+      toast.success('Tavolo pagato e svuotato')
+      fetchOrders(restaurantId)
+    } catch (error: any) {
+      toast.error(error.message || 'Errore durante il pagamento del tavolo')
+    }
+  }
+
+  const paymentOrderSubtotal = useMemo(() => {
+    if (!paymentOrder) return 0
+    return paymentOrder.items.reduce((sum, item) => sum + item.total_price, 0)
+  }, [paymentOrder])
+
+  const paymentOrderTotal = paymentOrder?.total_amount ?? 0
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -244,6 +310,123 @@ export function RestaurantOrders() {
   }
 
   return (
+    <>
+      {isPaymentModalOpen && paymentOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Paga Conto</h3>
+                <p className="text-sm text-gray-500">
+                  Tavolo {paymentOrder.table_name} · Ordine #{paymentOrder.id.slice(0, 8)}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setPaymentModalOpen(false)
+                  setPaymentOrder(null)
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-6 py-4">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700">Riepilogo ordine</h4>
+                <ul className="mt-2 space-y-1 text-sm text-gray-600">
+                  {paymentOrder.items.map(item => {
+                    const product = products[item.product_id]
+                    return (
+                      <li key={item.id} className="flex justify-between">
+                        <span>
+                          {item.quantity}× {product?.name || 'Prodotto'}
+                          {item.notes && <span className="text-gray-500"> – {item.notes}</span>}
+                        </span>
+                        <span className="font-medium">€{item.total_price.toFixed(2)}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+
+              <div className="text-sm text-gray-600">
+                <div className="flex justify-between">
+                  <span>Subtotale</span>
+                  <span>€{paymentOrderSubtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-semibold text-gray-700">Totale da pagare</span>
+                  <span className="text-lg font-bold text-primary-600">€{paymentOrderTotal.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold text-gray-700">Metodo di pagamento</p>
+                <div className="mt-3 flex gap-3">
+                  <label
+                    className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition ${
+                      paymentMethod === 'cash'
+                        ? 'border-primary-500 bg-primary-50 text-primary-700'
+                        : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="payment-method"
+                      value="cash"
+                      checked={paymentMethod === 'cash'}
+                      onChange={() => setPaymentMethod('cash')}
+                    />
+                    Contanti
+                  </label>
+                  <label
+                    className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition ${
+                      paymentMethod === 'card'
+                        ? 'border-primary-500 bg-primary-50 text-primary-700'
+                        : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="payment-method"
+                      value="card"
+                      checked={paymentMethod === 'card'}
+                      onChange={() => setPaymentMethod('card')}
+                    />
+                    Carta
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t bg-gray-50 px-6 py-4">
+              <button
+                onClick={() => {
+                  setPaymentModalOpen(false)
+                  setPaymentOrder(null)
+                }}
+                className="btn btn-secondary"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={async () => {
+                  if (!paymentOrder) return
+                  await markAsPaid(paymentOrder.id, paymentMethod)
+                  setPaymentModalOpen(false)
+                  setPaymentOrder(null)
+                }}
+                className="btn btn-primary"
+              >
+                Conferma pagamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div>
       <h1 className="text-3xl font-bold text-gray-900 mb-6">Ordini in Tempo Reale</h1>
 
@@ -253,6 +436,21 @@ export function RestaurantOrders() {
             <h2 className="text-xl font-semibold mb-4">
               {tableOrders[0]?.table_name || 'Tavolo sconosciuto'}
             </h2>
+
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+              <div className="text-sm text-gray-600">
+                <span className="font-medium text-gray-900">Totale tavolo:</span>{' '}
+                €{tableOrders.reduce((sum, order) => sum + order.total_amount, 0).toFixed(2)}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => closeTable(tableId)}
+                  className="btn btn-secondary text-sm"
+                >
+                  Chiudi e Paga Tavolo
+                </button>
+              </div>
+            </div>
             
             <div className="space-y-4">
               {tableOrders.map((order) => (
@@ -316,15 +514,15 @@ export function RestaurantOrders() {
                         onClick={() => updateOrderStatus(order.id, 'served')}
                         className="btn btn-primary text-sm"
                       >
-                        Segna come Servito
+                        Consegnato al Tavolo
                       </button>
                     )}
                     {order.status !== 'paid' && (
                       <button
-                        onClick={() => markAsPaid(order.id)}
+                        onClick={() => openPaymentModal(order)}
                         className="btn btn-secondary text-sm"
                       >
-                        Conto Pagato
+                        Paga Conto
                       </button>
                     )}
                   </div>
@@ -341,6 +539,7 @@ export function RestaurantOrders() {
         )}
       </div>
     </div>
+  </>
   )
 }
 

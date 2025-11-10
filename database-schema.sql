@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS restaurants (
   email VARCHAR(255),
   logo_url TEXT,
   primary_color VARCHAR(7),
+  all_you_can_eat_enabled BOOLEAN NOT NULL DEFAULT false,
+  all_you_can_eat_lunch_price DECIMAL(10, 2),
+  all_you_can_eat_dinner_price DECIMAL(10, 2),
   subscription_status VARCHAR(20) NOT NULL DEFAULT 'trial' CHECK (subscription_status IN ('active', 'trial', 'inactive')),
   subscription_plan VARCHAR(50),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -225,6 +228,22 @@ CREATE POLICY "Admins can update restaurants" ON restaurants
     )
   );
 
+CREATE POLICY "Restaurant managers can update their restaurant settings" ON restaurants
+  FOR UPDATE USING (
+    id IN (
+      SELECT restaurant_id FROM users
+      WHERE users.id = auth.uid()
+      AND users.role = 'restaurant_manager'
+    )
+  )
+  WITH CHECK (
+    id IN (
+      SELECT restaurant_id FROM users
+      WHERE users.id = auth.uid()
+      AND users.role = 'restaurant_manager'
+    )
+  );
+
 -- Policies for products (public read for customers)
 CREATE POLICY "Anyone can read products for active restaurants" ON products
   FOR SELECT USING (
@@ -258,6 +277,8 @@ CREATE POLICY "Anyone can create orders" ON orders
 
 -- Similar policies for other tables...
 -- (Note: You should implement comprehensive RLS policies for all tables)
+
+
 
 
 

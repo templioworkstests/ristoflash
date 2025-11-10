@@ -1,12 +1,27 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { LogOut, LayoutDashboard, UtensilsCrossed, Table, ShoppingCart, Users, Menu, X } from 'lucide-react'
-import { signOut } from '@/utils/auth'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import {
+  LogOut,
+  LayoutDashboard,
+  UtensilsCrossed,
+  Table,
+  ShoppingCart,
+  Users,
+  Menu,
+  X,
+  ChefHat,
+  CreditCard,
+  BarChart3,
+} from 'lucide-react'
+import { getCurrentUser, signOut } from '@/utils/auth'
 import { toast } from 'react-hot-toast'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 export function RestaurantLayout() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [loadingUser, setLoadingUser] = useState(true)
 
   const handleSignOut = async () => {
     await signOut()
@@ -14,34 +29,72 @@ export function RestaurantLayout() {
     navigate('/login')
   }
 
-  const navigation = [
-    {
-      to: '/restaurant',
-      label: 'Dashboard',
-      icon: LayoutDashboard,
-      end: true,
-    },
-    {
-      to: '/restaurant/menu',
-      label: 'Menu',
-      icon: UtensilsCrossed,
-    },
-    {
-      to: '/restaurant/tables',
-      label: 'Tavoli',
-      icon: Table,
-    },
-    {
-      to: '/restaurant/orders',
-      label: 'Ordini',
-      icon: ShoppingCart,
-    },
-    {
-      to: '/restaurant/staff',
-      label: 'Staff',
-      icon: Users,
-    },
-  ]
+  useEffect(() => {
+    async function loadUser() {
+      const user = await getCurrentUser()
+      setCurrentUser(user)
+      setLoadingUser(false)
+    }
+    loadUser()
+  }, [])
+
+  useEffect(() => {
+    if (!loadingUser && currentUser?.role === 'kitchen' && location.pathname === '/restaurant') {
+      navigate('/restaurant/kitchen', { replace: true })
+    }
+  }, [currentUser, loadingUser, location.pathname, navigate])
+
+  const navigation = useMemo(() => {
+    const fullNav = [
+      {
+        to: '/restaurant',
+        label: 'Dashboard',
+        icon: LayoutDashboard,
+        end: true,
+      },
+      {
+        to: '/restaurant/menu',
+        label: 'Menu',
+        icon: UtensilsCrossed,
+      },
+      {
+        to: '/restaurant/tables',
+        label: 'Tavoli',
+        icon: Table,
+      },
+      {
+        to: '/restaurant/orders',
+        label: 'Ordini',
+        icon: ShoppingCart,
+      },
+      {
+        to: '/restaurant/kitchen',
+        label: 'Cucina',
+        icon: ChefHat,
+      },
+      {
+        to: '/restaurant/payments',
+        label: 'Pagamenti',
+        icon: CreditCard,
+      },
+      {
+        to: '/restaurant/analytics',
+        label: 'Statistiche',
+        icon: BarChart3,
+      },
+      {
+        to: '/restaurant/staff',
+        label: 'Staff',
+        icon: Users,
+      },
+    ]
+
+    if (currentUser?.role === 'kitchen') {
+      return fullNav.filter((item) => item.to === '/restaurant/kitchen')
+    }
+
+    return fullNav
+  }, [currentUser])
 
   const navLinkClass = (isActive: boolean) =>
     `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
@@ -49,6 +102,14 @@ export function RestaurantLayout() {
         ? 'border-primary-500 text-gray-900'
         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
     }`
+
+  if (loadingUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

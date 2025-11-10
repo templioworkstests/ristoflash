@@ -26,6 +26,14 @@ export function CustomerMenu() {
   const [loading, setLoading] = useState(true)
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null)
+  const isAllYouCanEatActive =
+    !!restaurant?.all_you_can_eat_enabled &&
+    (restaurant.all_you_can_eat_lunch_price !== null || restaurant.all_you_can_eat_dinner_price !== null)
+
+  const formatPrice = (value: number | null | undefined) => {
+    if (value === null || value === undefined) return '-'
+    return `€${value.toFixed(2)}`
+  }
 
   useEffect(() => {
     if (restaurantId && tableId) {
@@ -116,6 +124,7 @@ export function CustomerMenu() {
   }
 
   function getCartTotal() {
+    if (isAllYouCanEatActive) return 0
     return cart.reduce((total, item) => total + (item.product.price * item.quantity), 0)
   }
 
@@ -124,7 +133,7 @@ export function CustomerMenu() {
 
     try {
       // Create order
-      const totalAmount = getCartTotal()
+      const totalAmount = isAllYouCanEatActive ? 0 : getCartTotal()
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert([
@@ -146,8 +155,8 @@ export function CustomerMenu() {
         order_id: orderData.id,
         product_id: item.product.id,
         quantity: item.quantity,
-        unit_price: item.product.price,
-        total_price: item.product.price * item.quantity,
+        unit_price: isAllYouCanEatActive ? 0 : item.product.price,
+        total_price: isAllYouCanEatActive ? 0 : item.product.price * item.quantity,
         notes: item.notes || null,
         status: 'pending',
       }))
@@ -266,6 +275,19 @@ export function CustomerMenu() {
           )}
         </div>
       </header>
+      {isAllYouCanEatActive && (
+        <div className="bg-primary-50 border-b border-primary-100 text-primary-700">
+          <div className="px-4 py-3 text-sm">
+            <p className="font-semibold">Modalità All You Can Eat attiva</p>
+            <p className="mt-1">
+              Prezzo pranzo: {formatPrice(restaurant?.all_you_can_eat_lunch_price)} &bull; Prezzo cena: {formatPrice(restaurant?.all_you_can_eat_dinner_price)}
+            </p>
+            <p className="mt-1 text-xs text-primary-600">
+              Ordina pure dal menu: ogni piatto è incluso nel prezzo fisso.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Category Tabs */}
       <div className="bg-white border-b sticky top-[88px] z-10 overflow-x-auto">
@@ -321,7 +343,7 @@ export function CustomerMenu() {
                 )}
                 <div className="flex justify-between items-center">
                   <span className="text-xl font-bold text-primary-600">
-                    €{product.price.toFixed(2)}
+                    {isAllYouCanEatActive ? 'Incluso' : `€${product.price.toFixed(2)}`}
                   </span>
                   <button
                     onClick={(e) => {
@@ -368,7 +390,7 @@ export function CustomerMenu() {
               )}
               <div className="flex justify-between items-center mb-6">
                 <span className="text-2xl font-bold text-primary-600">
-                  €{selectedProduct.price.toFixed(2)}
+                  {isAllYouCanEatActive ? 'Incluso nella formula' : `€${selectedProduct.price.toFixed(2)}`}
                 </span>
               </div>
               <button
@@ -414,7 +436,9 @@ export function CustomerMenu() {
                     <div key={item.product.id} className="flex items-start space-x-4">
                       <div className="flex-1">
                         <h3 className="font-semibold">{item.product.name}</h3>
-                        <p className="text-sm text-gray-600">€{item.product.price.toFixed(2)} cad.</p>
+                        <p className="text-sm text-gray-600">
+                          {isAllYouCanEatActive ? 'Incluso' : `€${item.product.price.toFixed(2)} cad.`}
+                        </p>
                       </div>
                       <div className="flex items-center space-x-3">
                         <button
@@ -458,9 +482,14 @@ export function CustomerMenu() {
               <div className="flex justify-between items-center mb-4">
                 <span className="text-lg font-semibold">Totale:</span>
                 <span className="text-2xl font-bold text-primary-600">
-                  €{getCartTotal().toFixed(2)}
+                  {isAllYouCanEatActive ? 'Incluso' : `€${getCartTotal().toFixed(2)}`}
                 </span>
               </div>
+              {isAllYouCanEatActive && (
+                <p className="text-xs text-primary-600">
+                  Il conto verrà calcolato in base alla formula All You Can Eat scelta (pranzo/cena).
+                </p>
+              )}
               <button
                 onClick={placeOrder}
                 disabled={cart.length === 0}

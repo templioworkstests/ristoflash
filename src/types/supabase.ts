@@ -297,6 +297,9 @@ export type Database = {
       restaurants: {
         Row: {
           address: string | null
+          all_you_can_eat_dinner_price: number | null
+          all_you_can_eat_enabled: boolean
+          all_you_can_eat_lunch_price: number | null
           created_at: string | null
           email: string | null
           id: string
@@ -310,6 +313,9 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          all_you_can_eat_dinner_price?: number | null
+          all_you_can_eat_enabled?: boolean
+          all_you_can_eat_lunch_price?: number | null
           created_at?: string | null
           email?: string | null
           id?: string
@@ -323,6 +329,9 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          all_you_can_eat_dinner_price?: number | null
+          all_you_can_eat_enabled?: boolean
+          all_you_can_eat_lunch_price?: number | null
           created_at?: string | null
           email?: string | null
           id?: string

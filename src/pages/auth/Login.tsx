@@ -40,6 +40,8 @@ export function Login() {
         navigate('/admin')
       } else if (user.role === 'restaurant_manager' || user.role === 'staff') {
         navigate('/restaurant')
+      } else if (user.role === 'kitchen') {
+        navigate('/restaurant/kitchen')
       } else {
         toast.error('Ruolo non autorizzato')
       }

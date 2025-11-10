@@ -15,7 +15,7 @@ export function RestaurantStaff() {
     email: '',
     password: '',
     full_name: '',
-    role: 'staff' as 'restaurant_manager' | 'staff',
+    role: 'staff' as 'restaurant_manager' | 'staff' | 'kitchen',
   })
 
   useEffect(() => {
@@ -40,7 +40,7 @@ export function RestaurantStaff() {
         .from('users')
         .select('*')
         .eq('restaurant_id', restId)
-        .in('role', ['restaurant_manager', 'staff'])
+        .in('role', ['restaurant_manager', 'staff', 'kitchen'])
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -211,10 +211,16 @@ export function RestaurantStaff() {
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         user.role === 'restaurant_manager'
                           ? 'bg-purple-100 text-purple-800'
+                          : user.role === 'kitchen'
+                          ? 'bg-orange-100 text-orange-800'
                           : 'bg-blue-100 text-blue-800'
                       }`}
                     >
-                      {user.role === 'restaurant_manager' ? 'Manager' : 'Staff'}
+                      {user.role === 'restaurant_manager'
+                        ? 'Manager'
+                        : user.role === 'kitchen'
+                        ? 'Cucina'
+                        : 'Staff'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -225,7 +231,9 @@ export function RestaurantStaff() {
                           email: user.email,
                           password: '',
                           full_name: user.full_name || '',
-                          role: user.role as 'restaurant_manager' | 'staff',
+                          role: (['restaurant_manager', 'staff', 'kitchen'].includes(user.role)
+                            ? (user.role as 'restaurant_manager' | 'staff' | 'kitchen')
+                            : 'staff'),
                         })
                         setShowModal(true)
                       }}
@@ -294,11 +302,15 @@ export function RestaurantStaff() {
                     className="input mt-1"
                     value={formData.role}
                     onChange={(e) =>
-                      setFormData({ ...formData, role: e.target.value as 'restaurant_manager' | 'staff' })
+                      setFormData({
+                        ...formData,
+                        role: e.target.value as 'restaurant_manager' | 'staff' | 'kitchen',
+                      })
                     }
                   >
                     <option value="staff">Staff</option>
                     <option value="restaurant_manager">Manager</option>
+                    <option value="kitchen">Cucina</option>
                   </select>
                 </div>
               </div>

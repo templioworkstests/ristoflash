@@ -14,6 +14,9 @@ export interface Restaurant {
   email: string | null
   logo_url: string | null
   primary_color: string | null
+  all_you_can_eat_enabled: boolean
+  all_you_can_eat_lunch_price: number | null
+  all_you_can_eat_dinner_price: number | null
   subscription_status: SubscriptionStatus
   subscription_plan: string | null
   created_at: string | null
