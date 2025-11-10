@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
-import { Restaurant, Category, Product } from '@/types/database'
+import { Restaurant, Category, Product, Table } from '@/types/database'
 import { ShoppingCart, Plus, Minus, Bell, X, Check } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
@@ -18,6 +18,7 @@ export function CustomerMenu() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [table, setTable] = useState<Pick<Table, 'id' | 'name'> | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -29,6 +30,7 @@ export function CustomerMenu() {
   const [partySize, setPartySize] = useState<number | null>(null)
   const [partySizeInput, setPartySizeInput] = useState('')
   const [showPartySizeModal, setShowPartySizeModal] = useState(false)
+  const [isPartySizeMandatory, setIsPartySizeMandatory] = useState(false)
   const isAllYouCanEatActive =
     !!restaurant?.all_you_can_eat_enabled &&
     (restaurant.all_you_can_eat_lunch_price !== null || restaurant.all_you_can_eat_dinner_price !== null)
@@ -63,6 +65,14 @@ export function CustomerMenu() {
     }
   }, [tableId])
 
+  useEffect(() => {
+    if (!loading && (!partySize || partySize <= 0)) {
+      setPartySizeInput(prev => (prev ? prev : ''))
+      setIsPartySizeMandatory(true)
+      setShowPartySizeModal(true)
+    }
+  }, [loading, partySize])
+
   async function loadData() {
     if (!restaurantId || !tableId) {
       setLoading(false)
@@ -78,6 +88,19 @@ export function CustomerMenu() {
 
       if (restaurantError) throw restaurantError
       setRestaurant(restaurantData)
+
+      // Load table info
+      const { data: tableData, error: tableError } = await supabase
+        .from('tables')
+        .select('id, name')
+        .eq('id', tableId)
+        .single()
+
+      if (tableError) {
+        console.warn('Errore nel caricamento del tavolo:', tableError)
+      } else {
+        setTable(tableData)
+      }
 
       // Load categories
       const { data: categoriesData, error: categoriesError } = await supabase
@@ -188,6 +211,7 @@ export function CustomerMenu() {
       return true
     }
     setPartySizeInput(partySizeInput || '')
+    setIsPartySizeMandatory(true)
     setShowPartySizeModal(true)
     return false
   }
@@ -365,7 +389,7 @@ export function CustomerMenu() {
           )}
           <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
             <span className="inline-flex items-center gap-2 bg-white/15 px-3 py-1 rounded-full">
-              Tavolo #{tableId?.slice(0, 4).toUpperCase()}
+              {table?.name ? table.name : `Tavolo #${tableId?.slice(0, 4).toUpperCase()}`}
             </span>
             {activePartySize ? (
               <span className="inline-flex items-center gap-2 bg-white/15 px-3 py-1 rounded-full">
@@ -374,6 +398,7 @@ export function CustomerMenu() {
                   type="button"
                   onClick={() => {
                     setPartySizeInput(activePartySize.toString())
+                    setIsPartySizeMandatory(false)
                     setShowPartySizeModal(true)
                   }}
                   className="underline text-sm"
@@ -384,7 +409,11 @@ export function CustomerMenu() {
             ) : (
               <button
                 type="button"
-                onClick={() => setShowPartySizeModal(true)}
+                onClick={() => {
+                  setPartySizeInput('')
+                  setIsPartySizeMandatory(true)
+                  setShowPartySizeModal(true)
+                }}
                 className="underline font-medium"
               >
                 Imposta numero persone
@@ -664,6 +693,7 @@ export function CustomerMenu() {
                     className="text-sm font-medium text-primary-600 underline"
                     onClick={() => {
                       setPartySizeInput(activePartySize ? activePartySize.toString() : '')
+                      setIsPartySizeMandatory(false)
                       setShowPartySizeModal(true)
                     }}
                   >
@@ -717,17 +747,19 @@ export function CustomerMenu() {
 
       {/* Party Size Modal */}
       {showPartySizeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Quante persone siete al tavolo?</h3>
-              <button
-                onClick={() => setShowPartySizeModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-                type="button"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              {!isPartySizeMandatory && (
+                <button
+                  onClick={() => setShowPartySizeModal(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                  type="button"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              )}
             </div>
             <p className="text-sm text-gray-600 mb-4">
               Inserisci il numero di persone presenti al tavolo. Puoi modificarlo in qualsiasi momento.
@@ -742,14 +774,7 @@ export function CustomerMenu() {
               onChange={(event) => setPartySizeInput(event.target.value)}
               placeholder="Es. 3"
             />
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setShowPartySizeModal(false)}
-              >
-                Annulla
-              </button>
+            <div className="mt-6 flex justify-end">
               <button
                 type="button"
                 className="btn btn-primary"
@@ -765,6 +790,7 @@ export function CustomerMenu() {
                   }
                   setPartySize(parsed)
                   setPartySizeInput(parsed.toString())
+                  setIsPartySizeMandatory(false)
                   try {
                     localStorage.setItem(`partySize:${tableId}`, parsed.toString())
                   } catch (error) {
