@@ -252,6 +252,8 @@ export type Database = {
           price: number
           restaurant_id: string
           status: string
+          ayce_limit_enabled: boolean
+          ayce_limit_quantity: number | null
           updated_at: string | null
         }
         Insert: {
@@ -265,6 +267,8 @@ export type Database = {
           price: number
           restaurant_id: string
           status?: string
+          ayce_limit_enabled?: boolean
+          ayce_limit_quantity?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -278,6 +282,8 @@ export type Database = {
           price?: number
           restaurant_id?: string
           status?: string
+          ayce_limit_enabled?: boolean
+          ayce_limit_quantity?: number | null
           updated_at?: string | null
         }
         Relationships: [

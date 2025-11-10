@@ -63,9 +63,15 @@ CREATE TABLE IF NOT EXISTS products (
   price DECIMAL(10, 2) NOT NULL,
   image_url TEXT,
   status VARCHAR(20) NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'unavailable')),
+  ayce_limit_enabled BOOLEAN NOT NULL DEFAULT false,
+  ayce_limit_quantity INTEGER,
   display_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT products_ayce_limit_check CHECK (
+    ayce_limit_enabled = false
+    OR (ayce_limit_quantity IS NOT NULL AND ayce_limit_quantity > 0)
+  )
 );
 
 -- Product Variants table

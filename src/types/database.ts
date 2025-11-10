@@ -52,6 +52,8 @@ export interface Product {
   price: number
   image_url: string | null
   status: ProductStatus
+  ayce_limit_enabled: boolean
+  ayce_limit_quantity: number | null
   display_order: number
   created_at: string | null
   updated_at: string | null

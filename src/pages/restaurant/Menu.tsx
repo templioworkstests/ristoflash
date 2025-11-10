@@ -23,6 +23,8 @@ export function RestaurantMenu() {
     category_id: '',
     status: 'available' as 'available' | 'unavailable',
     image_url: '',
+    ayceLimitEnabled: false,
+    ayceLimitQuantity: '',
   })
   const [productImageFile, setProductImageFile] = useState<File | null>(null)
   const [productImagePreview, setProductImagePreview] = useState<string | null>(null)
@@ -57,7 +59,7 @@ export function RestaurantMenu() {
 
   async function optimizeImage(file: File, maxSize = 600, quality = 0.6) {
     const image = await loadImage(file)
-    let { width, height } = image
+    const { width, height } = image
     const scale = Math.min(1, maxSize / Math.max(width, height))
 
     const canvas = document.createElement('canvas')
@@ -334,6 +336,25 @@ export function RestaurantMenu() {
     if (!restaurantId || !productForm.category_id) return
 
     try {
+      const priceValue = parseFloat(productForm.price)
+      if (Number.isNaN(priceValue)) {
+        toast.error('Il prezzo inserito non è valido.')
+        return
+      }
+
+      const limitEnabled =
+        (allYouCanEatSettings.enabled || productForm.ayceLimitEnabled) && productForm.ayceLimitEnabled
+      let limitQuantityValue: number | null = null
+
+      if (limitEnabled) {
+        const parsedLimit = parseInt(productForm.ayceLimitQuantity, 10)
+        if (Number.isNaN(parsedLimit) || parsedLimit <= 0) {
+          toast.error('Inserisci un limite valido maggiore di zero.')
+          return
+        }
+        limitQuantityValue = parsedLimit
+      }
+
       let imageUrl = productForm.image_url?.trim() ? productForm.image_url.trim() : null
       let previousImageUrl: string | null = null
 
@@ -363,10 +384,12 @@ export function RestaurantMenu() {
           .update({
             name: productForm.name,
             description: productForm.description,
-            price: parseFloat(productForm.price),
+            price: priceValue,
             category_id: productForm.category_id,
             status: productForm.status,
             image_url: imageUrl,
+            ayce_limit_enabled: limitEnabled,
+            ayce_limit_quantity: limitQuantityValue,
           })
           .eq('id', editingProduct.id)
 
@@ -387,13 +410,15 @@ export function RestaurantMenu() {
           .from('products')
           .insert([{
             restaurant_id: restaurantId,
-            price: parseFloat(productForm.price),
+            price: priceValue,
             display_order: maxOrder + 1,
             name: productForm.name,
             description: productForm.description,
             category_id: productForm.category_id,
             status: productForm.status,
             image_url: imageUrl,
+            ayce_limit_enabled: limitEnabled,
+            ayce_limit_quantity: limitQuantityValue,
           }])
 
         if (error) throw error
@@ -409,6 +434,8 @@ export function RestaurantMenu() {
         category_id: selectedCategory || '',
         status: 'available',
         image_url: '',
+        ayceLimitEnabled: false,
+        ayceLimitQuantity: '',
       })
       setProductImageFile(null)
       revokePreview(productImagePreview)
@@ -487,6 +514,8 @@ export function RestaurantMenu() {
     ? products.filter(p => p.category_id === selectedCategory)
     : products
 
+  const canEditAyceLimit = allYouCanEatSettings.enabled || productForm.ayceLimitEnabled
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -521,6 +550,8 @@ export function RestaurantMenu() {
                 category_id: selectedCategory || categories[0]?.id || '',
                 status: 'available',
                 image_url: '',
+                ayceLimitEnabled: false,
+                ayceLimitQuantity: '',
               })
               setProductImageFile(null)
               revokePreview(productImagePreview)
@@ -690,6 +721,11 @@ export function RestaurantMenu() {
                     {product.description && (
                       <p className="text-sm text-gray-600 mb-2">{product.description}</p>
                     )}
+                    {product.ayce_limit_enabled && product.ayce_limit_quantity && (
+                      <p className="text-xs font-medium text-primary-600 mb-2">
+                        Limite AYCE: {product.ayce_limit_quantity} pezzi a persona
+                      </p>
+                    )}
                     <div className="flex items-center justify-between">
                       <span
                         className={`px-2 py-1 rounded text-xs ${
@@ -711,6 +747,8 @@ export function RestaurantMenu() {
                               category_id: product.category_id,
                               status: product.status as 'available' | 'unavailable',
                               image_url: product.image_url || '',
+                              ayceLimitEnabled: product.ayce_limit_enabled,
+                              ayceLimitQuantity: product.ayce_limit_quantity ? product.ayce_limit_quantity.toString() : '',
                             })
                             setProductImageFile(null)
                             revokePreview(productImagePreview)
@@ -883,6 +921,51 @@ export function RestaurantMenu() {
                   />
                   <p className="text-xs text-gray-500 mt-1">Max 8 MB. Formati consigliati: JPG o PNG.</p>
                 </div>
+                {canEditAyceLimit && (
+                  <div className="rounded-lg border border-primary-200 bg-primary-50/60 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-primary-700">Limita pezzi in formula AYCE</span>
+                      <label className="inline-flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          checked={productForm.ayceLimitEnabled}
+                          onChange={(event) =>
+                            setProductForm((prev) => ({
+                              ...prev,
+                              ayceLimitEnabled: event.target.checked,
+                              ayceLimitQuantity: event.target.checked ? prev.ayceLimitQuantity : '',
+                            }))
+                          }
+                        />
+                        <span className="text-sm text-primary-700">Attiva limite</span>
+                      </label>
+                    </div>
+                    {productForm.ayceLimitEnabled && (
+                      <div>
+                        <label className="block text-sm font-medium text-primary-700">
+                          Numero massimo pezzi per persona
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          className="input mt-1"
+                          value={productForm.ayceLimitQuantity}
+                          onChange={(event) =>
+                            setProductForm((prev) => ({
+                              ...prev,
+                              ayceLimitQuantity: event.target.value,
+                            }))
+                          }
+                        />
+                        <p className="text-xs text-primary-600 mt-1">
+                          Il limite si applica solo agli ordini effettuati in modalità All You Can Eat.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="mt-6 flex justify-end space-x-3">
                 <button
@@ -897,6 +980,8 @@ export function RestaurantMenu() {
                       category_id: selectedCategory || '',
                       status: 'available',
                       image_url: '',
+                      ayceLimitEnabled: false,
+                      ayceLimitQuantity: '',
                     })
                     setProductImageFile(null)
                     revokePreview(productImagePreview)

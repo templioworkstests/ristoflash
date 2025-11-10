@@ -29,6 +29,9 @@ export function CustomerMenu() {
   const isAllYouCanEatActive =
     !!restaurant?.all_you_can_eat_enabled &&
     (restaurant.all_you_can_eat_lunch_price !== null || restaurant.all_you_can_eat_dinner_price !== null)
+  const hasAyceLimits =
+    isAllYouCanEatActive &&
+    products.some(product => product.ayce_limit_enabled && product.ayce_limit_quantity && product.ayce_limit_quantity > 0)
 
   const formatPrice = (value: number | null | undefined) => {
     if (value === null || value === undefined) return '-'
@@ -91,6 +94,21 @@ export function CustomerMenu() {
 
   function addToCart(product: Product) {
     const existingItem = cart.find(item => item.product.id === product.id)
+
+    if (
+      isAllYouCanEatActive &&
+      product.ayce_limit_enabled &&
+      product.ayce_limit_quantity &&
+      product.ayce_limit_quantity > 0
+    ) {
+      const currentQuantity = existingItem ? existingItem.quantity : 0
+      if (currentQuantity >= product.ayce_limit_quantity) {
+        toast.error(
+          `Puoi ordinare al massimo ${product.ayce_limit_quantity} pezzi di ${product.name} in formula All You Can Eat.`
+        )
+        return
+      }
+    }
     
     if (existingItem) {
       setCart(cart.map(item =>
@@ -111,15 +129,31 @@ export function CustomerMenu() {
   }
 
   function updateQuantity(productId: string, quantity: number) {
+    const item = cart.find(entry => entry.product.id === productId)
+    if (!item) return
+
     if (quantity <= 0) {
       removeFromCart(productId)
       return
     }
     
-    setCart(cart.map(item =>
-      item.product.id === productId
-        ? { ...item, quantity }
-        : item
+    if (
+      isAllYouCanEatActive &&
+      item.product.ayce_limit_enabled &&
+      item.product.ayce_limit_quantity &&
+      item.product.ayce_limit_quantity > 0 &&
+      quantity > item.product.ayce_limit_quantity
+    ) {
+      toast.error(
+        `Il limite per ${item.product.name} è di ${item.product.ayce_limit_quantity} pezzi a persona in formula All You Can Eat.`
+      )
+      return
+    }
+    
+    setCart(cart.map(entry =>
+      entry.product.id === productId
+        ? { ...entry, quantity }
+        : entry
     ))
   }
 
@@ -204,6 +238,19 @@ export function CustomerMenu() {
     ? products.filter(p => p.category_id === selectedCategory)
     : products
 
+  const selectedProductLimitQuantity = selectedProduct?.ayce_limit_quantity ?? 0
+  const selectedProductHasLimit =
+    !!selectedProduct &&
+    isAllYouCanEatActive &&
+    selectedProduct.ayce_limit_enabled &&
+    selectedProductLimitQuantity > 0
+  const selectedProductLimitReached =
+    selectedProductHasLimit &&
+    cart.some(
+      item =>
+        item.product.id === selectedProduct.id && item.quantity >= selectedProductLimitQuantity
+    )
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -285,6 +332,11 @@ export function CustomerMenu() {
             <p className="mt-1 text-xs text-primary-600">
               Ordina pure dal menu: ogni piatto è incluso nel prezzo fisso.
             </p>
+            {hasAyceLimits && (
+              <p className="mt-2 text-xs font-semibold text-primary-700">
+                Alcuni piatti prevedono un limite di pezzi per persona. Controlla le note nella scheda prodotto.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -321,43 +373,71 @@ export function CustomerMenu() {
       {/* Products List */}
       <div className="px-4 py-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {filteredProducts.map((product) => (
-            <div
-              key={product.id}
-              className="bg-white rounded-lg shadow-sm overflow-hidden cursor-pointer"
-              onClick={() => setSelectedProduct(product)}
-            >
-              {product.image_url && (
-                <img
-                  src={product.image_url}
-                  alt={product.name}
-                  className="w-full h-48 object-cover"
-                />
-              )}
-              <div className="p-4">
-                <h3 className="font-semibold text-lg mb-1">{product.name}</h3>
-                {product.description && (
-                  <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                    {product.description}
-                  </p>
+          {filteredProducts.map((product) => {
+            const currentItem = cart.find(item => item.product.id === product.id)
+            const limitQuantity = product.ayce_limit_quantity ?? 0
+            const ayceLimitActive =
+              isAllYouCanEatActive && product.ayce_limit_enabled && limitQuantity > 0
+            const limitReached =
+              ayceLimitActive && currentItem ? currentItem.quantity >= limitQuantity : false
+
+            return (
+              <div
+                key={product.id}
+                className="bg-white rounded-lg shadow-sm overflow-hidden cursor-pointer"
+                onClick={() => setSelectedProduct(product)}
+              >
+                {product.image_url && (
+                  <img
+                    src={product.image_url}
+                    alt={product.name}
+                    className="w-full h-48 object-cover"
+                  />
                 )}
-                <div className="flex justify-between items-center">
-                  <span className="text-xl font-bold text-primary-600">
-                    {isAllYouCanEatActive ? 'Incluso' : `€${product.price.toFixed(2)}`}
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      addToCart(product)
-                    }}
-                    className="bg-primary-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-primary-700"
-                  >
-                    <Plus className="h-4 w-4 inline" />
-                  </button>
+                <div className="p-4 space-y-2">
+                  <div>
+                    <h3 className="font-semibold text-lg">{product.name}</h3>
+                    {product.description && (
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {product.description}
+                      </p>
+                    )}
+                    {ayceLimitActive && (
+                      <p className="text-xs font-medium text-primary-600">
+                        Limite AYCE: {limitQuantity} pezzi a persona
+                        {limitReached ? ' (limite raggiunto)' : ''}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xl font-bold text-primary-600">
+                      {isAllYouCanEatActive ? 'Incluso' : `€${product.price.toFixed(2)}`}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (limitReached) {
+                          toast.error(
+                            `Limite raggiunto: massimo ${limitQuantity} pezzi di ${product.name}.`
+                          )
+                          return
+                        }
+                        addToCart(product)
+                      }}
+                      className={`px-4 py-2 rounded-lg font-medium ${
+                        limitReached
+                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                          : 'bg-primary-600 text-white hover:bg-primary-700'
+                      }`}
+                      disabled={limitReached}
+                    >
+                      <Plus className="h-4 w-4 inline" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {filteredProducts.length === 0 && (
@@ -393,9 +473,26 @@ export function CustomerMenu() {
                   {isAllYouCanEatActive ? 'Incluso nella formula' : `€${selectedProduct.price.toFixed(2)}`}
                 </span>
               </div>
+              {selectedProductHasLimit && (
+                <p className="text-sm text-primary-600 mb-4">
+                  Limite AYCE: {selectedProductLimitQuantity} pezzi a persona
+                  {selectedProductLimitReached ? '. Limite raggiunto.' : '.'}
+                </p>
+              )}
               <button
-                onClick={() => addToCart(selectedProduct)}
-                className="btn btn-primary w-full"
+                onClick={() => {
+                  if (selectedProductLimitReached) {
+                    toast.error(
+                      `Limite raggiunto: massimo ${selectedProductLimitQuantity} pezzi di ${selectedProduct?.name}.`
+                    )
+                    return
+                  }
+                  if (selectedProduct) {
+                    addToCart(selectedProduct)
+                  }
+                }}
+                className="btn btn-primary w-full disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={selectedProductLimitReached}
               >
                 Aggiungi al Carrello
               </button>
@@ -432,37 +529,53 @@ export function CustomerMenu() {
                 <p className="text-center text-gray-500 py-8">Il carrello è vuoto</p>
               ) : (
                 <div className="space-y-4">
-                  {cart.map((item) => (
-                    <div key={item.product.id} className="flex items-start space-x-4">
-                      <div className="flex-1">
-                        <h3 className="font-semibold">{item.product.name}</h3>
-                        <p className="text-sm text-gray-600">
-                          {isAllYouCanEatActive ? 'Incluso' : `€${item.product.price.toFixed(2)} cad.`}
-                        </p>
+                  {cart.map(item => {
+                    const limitQuantity = item.product.ayce_limit_quantity ?? 0
+                    const limitActive =
+                      isAllYouCanEatActive && item.product.ayce_limit_enabled && limitQuantity > 0
+                    const limitReached = limitActive && item.quantity >= limitQuantity
+
+                    return (
+                      <div key={item.product.id} className="flex items-start space-x-4">
+                        <div className="flex-1">
+                          <h3 className="font-semibold">{item.product.name}</h3>
+                          <p className="text-sm text-gray-600">
+                            {isAllYouCanEatActive ? 'Incluso' : `€${item.product.price.toFixed(2)} cad.`}
+                          </p>
+                          {limitActive && (
+                            <p className="text-xs text-primary-600 mt-1">
+                              Limite: {limitQuantity} pezzi a persona
+                              {limitReached ? ' (limite raggiunto)' : ''}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <button
+                            onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                            className="bg-gray-200 rounded-full p-1"
+                          >
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className="font-semibold w-8 text-center">{item.quantity}</span>
+                          <button
+                            onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                            className={`rounded-full p-1 ${
+                              limitReached ? 'bg-gray-200 cursor-not-allowed opacity-60' : 'bg-gray-200'
+                            }`}
+                            disabled={limitReached}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => removeFromCart(item.product.id)}
+                            className="text-red-600 ml-2"
+                          >
+                            <X className="h-5 w-5" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-3">
-                        <button
-                          onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                          className="bg-gray-200 rounded-full p-1"
-                        >
-                          <Minus className="h-4 w-4" />
-                        </button>
-                        <span className="font-semibold w-8 text-center">{item.quantity}</span>
-                        <button
-                          onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                          className="bg-gray-200 rounded-full p-1"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => removeFromCart(item.product.id)}
-                          className="text-red-600 ml-2"
-                        >
-                          <X className="h-5 w-5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
