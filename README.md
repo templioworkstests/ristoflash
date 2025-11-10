@@ -83,6 +83,13 @@ Per garantire la sicurezza, implementa le seguenti politiche RLS in Supabase:
 
 Vedi `database-schema.sql` per lo schema completo del database.
 
+## Automazione push da terminale
+
+- Usa `./scripts/autopush.sh "Messaggio commit"` per eseguire in sequenza `git add -A`, `git commit` e `git push` sul branch corrente.
+- Lo script mostra prima lo stato (`git status --short`) così puoi verificare le modifiche che sta per includere.
+- L'autenticazione verso GitHub sfrutta le credenziali già salvate (PAT nel portachiavi). Se viene richiesta, inserisci il tuo username e il token come password.
+- Assicurati di rigenerare un PAT se lo hai esposto e conferma che le regole di `.gitignore` tengano fuori i file sensibili prima di eseguire lo script.
+
 
 
 
