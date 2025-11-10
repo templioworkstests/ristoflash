@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/utils/auth'
 import { toast } from 'react-hot-toast'
+import { OrderEditorModal } from '@/components/OrderEditorModal'
 
 type Order = import('@/types/database').Order
 type OrderItem = import('@/types/database').OrderItem
@@ -19,6 +20,7 @@ export function RestaurantOrders() {
   const [isPaymentModalOpen, setPaymentModalOpen] = useState(false)
   const [paymentOrder, setPaymentOrder] = useState<RestaurantOrder | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash')
+  const [editingOrder, setEditingOrder] = useState<RestaurantOrder | null>(null)
 
   useEffect(() => {
     let channel: any = null
@@ -301,6 +303,12 @@ export function RestaurantOrders() {
 
   const paymentOrderTotal = paymentOrder?.total_amount ?? 0
 
+  async function refreshOrders() {
+    if (restaurantId) {
+      await fetchOrders(restaurantId)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -311,6 +319,17 @@ export function RestaurantOrders() {
 
   return (
     <>
+      {editingOrder && (
+        <OrderEditorModal
+          order={editingOrder}
+          tableName={editingOrder.table_name}
+          products={products}
+          open={!!editingOrder}
+          onClose={() => setEditingOrder(null)}
+          onUpdated={refreshOrders}
+        />
+      )}
+
       {isPaymentModalOpen && paymentOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
@@ -493,6 +512,12 @@ export function RestaurantOrders() {
                   </div>
 
                   <div className="flex space-x-2">
+                    <button
+                      onClick={() => setEditingOrder(order)}
+                      className="btn btn-secondary text-sm"
+                    >
+                      Modifica Ordine
+                    </button>
                     {order.status === 'pending' && (
                       <button
                         onClick={() => updateOrderStatus(order.id, 'preparing')}

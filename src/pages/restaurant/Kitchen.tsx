@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/utils/auth'
 import type { Order, OrderItem, Product, Table } from '@/types/database'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
+import { OrderEditorModal } from '@/components/OrderEditorModal'
 
 type KitchenOrder = Order & {
   items: OrderItem[]
@@ -15,6 +16,7 @@ export function RestaurantKitchen() {
   const [orders, setOrders] = useState<KitchenOrder[]>([])
   const [productsMap, setProductsMap] = useState<Record<string, Product>>({})
   const [loading, setLoading] = useState(true)
+  const [editingOrder, setEditingOrder] = useState<KitchenOrder | null>(null)
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null
@@ -173,6 +175,22 @@ export function RestaurantKitchen() {
 
   return (
     <div className="space-y-8">
+      {editingOrder && (
+        <OrderEditorModal
+          order={editingOrder}
+          tableName={editingOrder.table?.name}
+          products={productsMap}
+          open={!!editingOrder}
+          onClose={() => setEditingOrder(null)}
+          onUpdated={async () => {
+            setEditingOrder(null)
+            if (restaurantId) {
+              await fetchOrders(restaurantId)
+            }
+          }}
+        />
+      )}
+
       <header>
         <h1 className="text-3xl font-bold text-gray-900">Sala Cucina</h1>
         <p className="text-gray-600">Gestisci la preparazione delle comande in arrivo.</p>
@@ -222,12 +240,20 @@ export function RestaurantKitchen() {
                   <span className="text-xs uppercase tracking-wide text-gray-500">
                     {status === 'pending' ? 'In attesa di chef' : 'In corso'}
                   </span>
-                  <button
-                    onClick={() => advanceOrder(order.id, status === 'pending' ? 'preparing' : 'ready')}
-                    className="btn btn-primary text-sm"
-                  >
-                    {status === 'pending' ? 'Inizia Preparazione' : 'Segna Pronto'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setEditingOrder(order)}
+                      className="btn btn-secondary text-xs md:text-sm"
+                    >
+                      Modifica
+                    </button>
+                    <button
+                      onClick={() => advanceOrder(order.id, status === 'pending' ? 'preparing' : 'ready')}
+                      className="btn btn-primary text-xs md:text-sm"
+                    >
+                      {status === 'pending' ? 'Inizia Preparazione' : 'Segna Pronto'}
+                    </button>
+                  </div>
                 </div>
               </article>
             ))}
