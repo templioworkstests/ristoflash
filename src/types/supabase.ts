@@ -125,6 +125,7 @@ export type Database = {
           status: string
           table_id: string
           total_amount: number
+          payment_method: 'cash' | 'card' | null
           updated_at: string | null
         }
         Insert: {
@@ -135,6 +136,7 @@ export type Database = {
           status?: string
           table_id: string
           total_amount: number
+          payment_method?: 'cash' | 'card' | null
           updated_at?: string | null
         }
         Update: {
@@ -145,6 +147,7 @@ export type Database = {
           status?: string
           table_id?: string
           total_amount?: number
+          payment_method?: 'cash' | 'card' | null
           updated_at?: string | null
         }
         Relationships: [

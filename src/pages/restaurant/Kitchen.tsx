@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/utils/auth'
 import type { Order, OrderItem, Product, Table } from '@/types/database'
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 
 type KitchenOrder = Order & {
   items: OrderItem[]
@@ -35,11 +36,12 @@ export function RestaurantKitchen() {
           .on(
             'postgres_changes',
             {
+              event: '*',
               schema: 'public',
               table: 'orders',
               filter: `restaurant_id=eq.${userRestaurantId}`,
             },
-            (payload) => {
+            (payload: RealtimePostgresChangesPayload<Order>) => {
               console.log('[Kitchen] orders change', payload)
               fetchOrders(userRestaurantId)
             }
@@ -47,10 +49,11 @@ export function RestaurantKitchen() {
           .on(
             'postgres_changes',
             {
+              event: '*',
               schema: 'public',
               table: 'order_items',
             },
-            (payload) => {
+            (payload: RealtimePostgresChangesPayload<OrderItem>) => {
               console.log('[Kitchen] order_items change', payload)
               fetchOrders(userRestaurantId)
             }
@@ -145,17 +148,20 @@ export function RestaurantKitchen() {
     }
   }
 
-  const groupedByStatus = useMemo(
-    () =>
-      orders.reduce(
-        (acc, order) => {
-          acc[order.status] = acc[order.status] ? [...acc[order.status], order] : [order]
-          return acc
-        },
-        {} as Record<'pending' | 'preparing', KitchenOrder[]>
-      ),
-    [orders]
-  )
+  const groupedByStatus = useMemo(() => {
+    return orders.reduce(
+      (acc, order) => {
+        if (order.status === 'pending' || order.status === 'preparing') {
+          acc[order.status].push(order)
+        }
+        return acc
+      },
+      {
+        pending: [] as KitchenOrder[],
+        preparing: [] as KitchenOrder[],
+      }
+    )
+  }, [orders])
 
   if (loading) {
     return (
