@@ -121,6 +121,7 @@ export type Database = {
           created_at: string | null
           id: string
           notes: string | null
+          party_size: number | null
           restaurant_id: string
           status: string
           table_id: string
@@ -132,6 +133,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           notes?: string | null
+          party_size?: number | null
           restaurant_id: string
           status?: string
           table_id: string
@@ -143,6 +145,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           notes?: string | null
+          party_size?: number | null
           restaurant_id?: string
           status?: string
           table_id?: string

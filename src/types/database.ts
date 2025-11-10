@@ -96,6 +96,7 @@ export interface Order {
   status: OrderStatus
   total_amount: number
   payment_method: 'cash' | 'card' | null
+  party_size: number | null
   notes: string | null
   created_at: string | null
   updated_at: string | null

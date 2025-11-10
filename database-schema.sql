@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS orders (
   table_id UUID NOT NULL REFERENCES tables(id) ON DELETE CASCADE,
   status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'ready', 'served', 'paid')),
   total_amount DECIMAL(10, 2) NOT NULL,
+  party_size INTEGER CHECK (party_size IS NULL OR party_size > 0),
   payment_method VARCHAR(20) CHECK (payment_method IS NULL OR payment_method IN ('cash', 'card')),
   notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

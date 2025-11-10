@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Restaurant, Category, Product } from '@/types/database'
@@ -26,6 +26,9 @@ export function CustomerMenu() {
   const [loading, setLoading] = useState(true)
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null)
+  const [partySize, setPartySize] = useState<number | null>(null)
+  const [partySizeInput, setPartySizeInput] = useState('')
+  const [showPartySizeModal, setShowPartySizeModal] = useState(false)
   const isAllYouCanEatActive =
     !!restaurant?.all_you_can_eat_enabled &&
     (restaurant.all_you_can_eat_lunch_price !== null || restaurant.all_you_can_eat_dinner_price !== null)
@@ -43,6 +46,22 @@ export function CustomerMenu() {
       loadData()
     }
   }, [restaurantId, tableId])
+
+  useEffect(() => {
+    if (!tableId) return
+    try {
+      const stored = localStorage.getItem(`partySize:${tableId}`)
+      if (stored) {
+        const parsed = parseInt(stored, 10)
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          setPartySize(parsed)
+          setPartySizeInput(parsed.toString())
+        }
+      }
+    } catch (error) {
+      console.warn('Unable to load party size from storage', error)
+    }
+  }, [tableId])
 
   async function loadData() {
     if (!restaurantId || !tableId) {
@@ -162,8 +181,24 @@ export function CustomerMenu() {
     return cart.reduce((total, item) => total + (item.product.price * item.quantity), 0)
   }
 
+  const activePartySize = useMemo(() => partySize ?? null, [partySize])
+
+  function ensurePartySize(): boolean {
+    if (activePartySize && activePartySize > 0) {
+      return true
+    }
+    setPartySizeInput(partySizeInput || '')
+    setShowPartySizeModal(true)
+    return false
+  }
+
   async function placeOrder() {
     if (!restaurantId || !tableId || cart.length === 0) return
+
+    if (!ensurePartySize()) {
+      toast.error('Indica quante persone sono al tavolo prima di inviare l\'ordine.')
+      return
+    }
 
     try {
       // Create order
@@ -177,6 +212,7 @@ export function CustomerMenu() {
             status: 'pending',
             total_amount: totalAmount,
             notes: orderNotes || null,
+            party_size: activePartySize,
           },
         ])
         .select()
@@ -205,6 +241,13 @@ export function CustomerMenu() {
       setOrderPlaced(true)
       setCart([])
       setOrderNotes('')
+      if (activePartySize) {
+        try {
+          localStorage.setItem(`partySize:${tableId}`, activePartySize.toString())
+        } catch (error) {
+          console.warn('Unable to persist party size', error)
+        }
+      }
       toast.success(`Ordine #${orderData.id.slice(0, 8)} inviato con successo!`)
     } catch (error: any) {
       toast.error(error.message || 'Errore durante l\'invio dell\'ordine')
@@ -320,6 +363,34 @@ export function CustomerMenu() {
           {restaurant.address && (
             <p className="text-sm opacity-90">{restaurant.address}</p>
           )}
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+            <span className="inline-flex items-center gap-2 bg-white/15 px-3 py-1 rounded-full">
+              Tavolo #{tableId?.slice(0, 4).toUpperCase()}
+            </span>
+            {activePartySize ? (
+              <span className="inline-flex items-center gap-2 bg-white/15 px-3 py-1 rounded-full">
+                {activePartySize} {activePartySize === 1 ? 'persona' : 'persone'}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPartySizeInput(activePartySize.toString())
+                    setShowPartySizeModal(true)
+                  }}
+                  className="underline text-sm"
+                >
+                  Modifica
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowPartySizeModal(true)}
+                className="underline font-medium"
+              >
+                Imposta numero persone
+              </button>
+            )}
+          </div>
         </div>
       </header>
       {isAllYouCanEatActive && (
@@ -580,6 +651,26 @@ export function CustomerMenu() {
               )}
             </div>
             <div className="border-t p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-600">
+                  Persone al tavolo:
+                </p>
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold text-gray-900">
+                    {activePartySize ? activePartySize : 'Non impostato'}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-sm font-medium text-primary-600 underline"
+                    onClick={() => {
+                      setPartySizeInput(activePartySize ? activePartySize.toString() : '')
+                      setShowPartySizeModal(true)
+                    }}
+                  >
+                    {activePartySize ? 'Modifica' : 'Imposta'}
+                  </button>
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Note per l'ordine (opzionale)
@@ -623,6 +714,72 @@ export function CustomerMenu() {
       >
         <Bell className="h-6 w-6" />
       </button>
+
+      {/* Party Size Modal */}
+      {showPartySizeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Quante persone siete al tavolo?</h3>
+              <button
+                onClick={() => setShowPartySizeModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+                type="button"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Inserisci il numero di persone presenti al tavolo. Puoi modificarlo in qualsiasi momento.
+            </p>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              step={1}
+              className="input w-full"
+              value={partySizeInput}
+              onChange={(event) => setPartySizeInput(event.target.value)}
+              placeholder="Es. 3"
+            />
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowPartySizeModal(false)}
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  const parsed = parseInt(partySizeInput, 10)
+                  if (Number.isNaN(parsed) || parsed <= 0) {
+                    toast.error('Inserisci un numero di persone valido (minimo 1).')
+                    return
+                  }
+                  if (parsed > 20) {
+                    toast.error('Per favore contatta lo staff per tavoli superiori a 20 persone.')
+                    return
+                  }
+                  setPartySize(parsed)
+                  setPartySizeInput(parsed.toString())
+                  try {
+                    localStorage.setItem(`partySize:${tableId}`, parsed.toString())
+                  } catch (error) {
+                    console.warn('Unable to persist party size', error)
+                  }
+                  setShowPartySizeModal(false)
+                  toast.success(`${parsed} ${parsed === 1 ? 'persona' : 'persone'} registrate al tavolo.`)
+                }}
+              >
+                Conferma
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
