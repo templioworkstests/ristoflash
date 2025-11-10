@@ -143,10 +143,17 @@ export function OrderEditorModal({
   async function handleSubmit() {
     if (isSubmitting) return
 
+    console.group('[OrderEditor] handleSubmit')
+    console.debug('Initial order', order)
+    console.debug('Current items', items)
+    console.debug('Deleted item ids', deletedItemIds)
+
     const remainingItems = items.filter(item => item.quantity > 0)
 
     if (remainingItems.length === 0) {
       toast.error('Un ordine deve contenere almeno un prodotto')
+      console.warn('[OrderEditor] Abort: zero items remaining')
+      console.groupEnd()
       return
     }
 
@@ -165,9 +172,13 @@ export function OrderEditorModal({
         }
       })
 
+      console.debug('Normalized items before submit', finalItems)
+
       const totalAmount = isAyce
         ? 0
         : finalItems.reduce((sum, item) => sum + item.total_price, 0)
+
+      console.debug('Calculated total amount', totalAmount)
 
       const { error: orderError } = await supabase
         .from('orders')
@@ -178,19 +189,27 @@ export function OrderEditorModal({
         })
         .eq('id', order.id)
 
-      if (orderError) throw orderError
+      if (orderError) {
+        console.error('[OrderEditor] Failed updating order', orderError)
+        throw orderError
+      }
 
       if (deletedItemIds.length > 0) {
+        console.debug('Deleting items', deletedItemIds)
         const { error: deleteError } = await supabase
           .from('order_items')
           .delete()
           .in('id', deletedItemIds)
 
-        if (deleteError) throw deleteError
+        if (deleteError) {
+          console.error('[OrderEditor] Failed deleting items', deleteError)
+          throw deleteError
+        }
       }
 
       const itemsToUpdate = finalItems.filter(item => item.id && !item.isNew)
       for (const item of itemsToUpdate) {
+        console.debug('Updating item', item)
         const { error: updateError } = await supabase
           .from('order_items')
           .update({
@@ -204,7 +223,10 @@ export function OrderEditorModal({
           })
           .eq('id', item.id)
 
-        if (updateError) throw updateError
+        if (updateError) {
+          console.error('[OrderEditor] Failed updating item', item.id, updateError)
+          throw updateError
+        }
       }
 
       const itemsToInsert = finalItems.filter(item => !item.id || item.isNew)
@@ -221,12 +243,18 @@ export function OrderEditorModal({
           options: item.options ?? null,
         }))
 
+        console.debug('Inserting items', insertPayload)
+
         const { error: insertError } = await supabase.from('order_items').insert(insertPayload)
-        if (insertError) throw insertError
+        if (insertError) {
+          console.error('[OrderEditor] Failed inserting items', insertError)
+          throw insertError
+        }
       }
 
       toast.success('Ordine aggiornato')
       onClose()
+      console.groupEnd()
       await onUpdated?.()
     } catch (error: any) {
       console.error('Order update error:', error)

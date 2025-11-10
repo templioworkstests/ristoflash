@@ -280,8 +280,52 @@ CREATE POLICY "Restaurant staff can view their restaurant orders" ON orders
     )
   );
 
+CREATE POLICY "Restaurant staff can update their restaurant orders" ON orders
+  FOR UPDATE USING (
+    restaurant_id IN (
+      SELECT restaurant_id FROM users
+      WHERE users.id = auth.uid()
+      AND users.role IN ('restaurant_manager', 'staff')
+    )
+  )
+  WITH CHECK (
+    restaurant_id IN (
+      SELECT restaurant_id FROM users
+      WHERE users.id = auth.uid()
+      AND users.role IN ('restaurant_manager', 'staff')
+    )
+  );
+
 CREATE POLICY "Anyone can create orders" ON orders
   FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Restaurant staff can manage order items" ON order_items
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1
+      FROM orders
+      WHERE orders.id = order_items.order_id
+      AND orders.restaurant_id IN (
+        SELECT restaurant_id
+        FROM users
+        WHERE users.id = auth.uid()
+        AND users.role IN ('restaurant_manager', 'staff')
+      )
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM orders
+      WHERE orders.id = order_items.order_id
+      AND orders.restaurant_id IN (
+        SELECT restaurant_id
+        FROM users
+        WHERE users.id = auth.uid()
+        AND users.role IN ('restaurant_manager', 'staff')
+      )
+    )
+  );
 
 -- Similar policies for other tables...
 -- (Note: You should implement comprehensive RLS policies for all tables)
