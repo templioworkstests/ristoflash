@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Restaurant, Category, Product, Table } from '@/types/database'
 import { ShoppingCart, Plus, Minus, Bell, X, Check } from 'lucide-react'
@@ -77,6 +77,11 @@ const translations = {
     languageItalian: 'Italiano',
     languageEnglish: 'Inglese',
     tableFallback: 'Tavolo #{id}',
+    tokenInvalidTitle: 'QR non valido',
+    tokenMissing: 'Questo QR non è valido. Richiedi un nuovo codice al personale del ristorante.',
+    tokenInvalid: 'Questo QR è scaduto oppure è stato rigenerato. Richiedi un nuovo codice al personale.',
+    tokenValidationError: 'Impossibile convalidare il QR. Riprova o chiedi assistenza allo staff.',
+    tokenRetry: 'Riprova',
     restaurantNotFoundTitle: 'Ristorante non trovato',
     restaurantNotFoundSubtitle: 'Verifica che il QR code sia corretto',
   },
@@ -141,6 +146,11 @@ const translations = {
     languageItalian: 'Italian',
     languageEnglish: 'English',
     tableFallback: 'Table #{id}',
+    tokenInvalidTitle: 'Invalid QR code',
+    tokenMissing: 'This QR code is not valid. Please ask the staff for a new one.',
+    tokenInvalid: 'This QR code has expired or has been regenerated. Please ask the staff for a new one.',
+    tokenValidationError: 'Unable to validate the QR code. Try again or ask the staff for assistance.',
+    tokenRetry: 'Try again',
     restaurantNotFoundTitle: 'Restaurant not found',
     restaurantNotFoundSubtitle: 'Check that the QR code is correct',
   },
@@ -188,6 +198,8 @@ function LanguageFlag({
 
 export function CustomerMenu() {
   const { restaurantId, tableId } = useParams<{ restaurantId: string; tableId: string }>()
+  const [searchParams] = useSearchParams()
+  const token = searchParams.get('token')
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -208,6 +220,8 @@ export function CustomerMenu() {
   const [showLanguageMenu, setShowLanguageMenu] = useState(false)
   const languageButtonRef = useRef<HTMLButtonElement | null>(null)
   const languageMenuRef = useRef<HTMLDivElement | null>(null)
+  const [tokenStatus, setTokenStatus] = useState<'pending' | 'valid' | 'invalid'>('pending')
+  const [tokenErrorKey, setTokenErrorKey] = useState<TranslationKey | null>(null)
 
   const t = (key: TranslationKey, vars?: Record<string, string | number>) => {
     const dictionary = translations[language] ?? translations.it
@@ -226,6 +240,7 @@ export function CustomerMenu() {
   const hasAyceLimits =
     isAllYouCanEatActive &&
     products.some(product => product.ayce_limit_enabled && product.ayce_limit_quantity && product.ayce_limit_quantity > 0)
+  const tokenErrorMessage = tokenErrorKey ? t(tokenErrorKey) : t('tokenValidationError')
 
   const formatPrice = (value: number | null | undefined) => {
     if (value === null || value === undefined) return '-'
@@ -233,10 +248,70 @@ export function CustomerMenu() {
   }
 
   useEffect(() => {
-    if (restaurantId && tableId) {
+    if (!restaurantId || !tableId) return
+    if (!token) {
+      setTokenStatus('invalid')
+      setTokenErrorKey('tokenMissing')
+      setLoading(false)
+      return
+    }
+
+    const safeToken = token as string
+
+    let ignore = false
+    setTokenStatus('pending')
+    setTokenErrorKey(null)
+    setLoading(true)
+
+    async function validate() {
+      try {
+        const { data, error } = await supabase.rpc('validate_table_token', { p_token: safeToken })
+
+        if (ignore) return
+
+        if (error) {
+          console.error('validate_table_token error', error)
+          setTokenStatus('invalid')
+          setTokenErrorKey('tokenValidationError')
+          setLoading(false)
+          return
+        }
+
+        const record = Array.isArray(data) ? data[0] : null
+
+        if (
+          !record ||
+          record.table_id !== tableId ||
+          record.restaurant_id !== restaurantId
+        ) {
+          setTokenStatus('invalid')
+          setTokenErrorKey('tokenInvalid')
+          setLoading(false)
+          return
+        }
+
+        setTokenStatus('valid')
+        setTokenErrorKey(null)
+      } catch (error) {
+        console.error('validate_table_token exception', error)
+        setTokenStatus('invalid')
+        setTokenErrorKey('tokenValidationError')
+        setLoading(false)
+      }
+    }
+
+    validate()
+
+    return () => {
+      ignore = true
+    }
+  }, [restaurantId, tableId, token])
+
+  useEffect(() => {
+    if (restaurantId && tableId && tokenStatus === 'valid') {
       loadData()
     }
-  }, [restaurantId, tableId])
+  }, [restaurantId, tableId, tokenStatus])
 
   useEffect(() => {
     try {
@@ -292,19 +367,21 @@ export function CustomerMenu() {
   }, [tableId])
 
   useEffect(() => {
+    if (tokenStatus !== 'valid') return
     if (!loading && (!partySize || partySize <= 0)) {
       setPartySizeInput(prev => (prev ? prev : ''))
       setIsPartySizeMandatory(true)
       setShowPartySizeModal(true)
     }
-  }, [loading, partySize])
+  }, [loading, partySize, tokenStatus])
 
   async function loadData() {
-    if (!restaurantId || !tableId) {
+    if (!restaurantId || !tableId || tokenStatus !== 'valid') {
       setLoading(false)
       return
     }
     try {
+      setLoading(true)
       // Load restaurant
       const { data: restaurantData, error: restaurantError } = await supabase
         .from('restaurants')
@@ -564,6 +641,23 @@ export function CustomerMenu() {
       item =>
         item.product.id === selectedProduct.id && item.quantity >= selectedProductLimitQuantity
     )
+
+  if (tokenStatus === 'invalid') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+        <div className="max-w-md rounded-xl bg-white p-8 text-center shadow-lg">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">{t('tokenInvalidTitle')}</h1>
+          <p className="text-gray-600 mb-6">{tokenErrorMessage}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="btn btn-primary w-full"
+          >
+            {t('tokenRetry')}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (

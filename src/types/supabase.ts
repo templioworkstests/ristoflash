@@ -384,6 +384,54 @@ export type Database = {
         }
         Relationships: []
       }
+      table_tokens: {
+        Row: {
+          created_at: string | null
+          expires_at: string
+          id: string
+          last_used_at: string | null
+          restaurant_id: string
+          revoked: boolean
+          table_id: string
+          token: string
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          last_used_at?: string | null
+          restaurant_id: string
+          revoked?: boolean
+          table_id: string
+          token: string
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          last_used_at?: string | null
+          restaurant_id?: string
+          revoked?: boolean
+          table_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "table_tokens_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "table_tokens_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "tables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tables: {
         Row: {
           area: string | null
@@ -511,6 +559,15 @@ export type Database = {
     }
     Functions: {
       is_admin: { Args: { user_id: string }; Returns: boolean }
+      validate_table_token: {
+        Args: { p_token: string }
+        Returns: Array<{
+          id: string
+          restaurant_id: string
+          table_id: string
+          expires_at: string
+        }>
+      }
     }
     Enums: {
       [_ in never]: never

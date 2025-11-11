@@ -19,8 +19,7 @@ Crea un file `.env.local` nella root del progetto con:
 ```
 VITE_SUPABASE_URL=https://YOUR_SUPABASE_PROJECT.supabase.co
 VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
-# Opzionale: gestisci la service role solo lato backend/edge functions, non nel frontend pubblico
-# SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
 ```
 
 ## Passo 3: Setup Database
@@ -88,6 +87,11 @@ Per caricare immagini di prodotti e logo:
 Per utilizzare l'applicazione in produzione:
 1. Configura il dominio nella sezione "Authentication" > "URL Configuration"
 2. Aggiungi il dominio ai redirect URLs
+
+### QR Code dinamici
+
+- Sai che i QR ora passano da `/qr/:restaurantId/:tableId`, generando token con validità 2 ore.
+- Assicurati di impostare la variabile `SUPABASE_SERVICE_ROLE_KEY` anche su Vercel (o nell'ambiente scelto) per permettere all'edge function di creare i token.
 
 ## Troubleshooting
 

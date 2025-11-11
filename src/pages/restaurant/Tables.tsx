@@ -50,7 +50,7 @@ export function RestaurantTables() {
 
   async function generateQRCode(tableId: string) {
     const baseUrl = window.location.origin
-    const qrUrl = `${baseUrl}/${restaurantId}/${tableId}`
+    const qrUrl = `${baseUrl}/qr/${restaurantId}/${tableId}`
     
     try {
       const qrDataUrl = await QRCode.toDataURL(qrUrl, {
@@ -212,7 +212,7 @@ export function RestaurantTables() {
                 <button
                   onClick={() => {
                     const baseUrl = window.location.origin
-                    const customerUrl = `${baseUrl}/${restaurantId}/${table.id}`
+                    const customerUrl = `${baseUrl}/qr/${restaurantId}/${table.id}`
                     window.open(customerUrl, '_blank')
                   }}
                   className="flex-1 btn btn-primary inline-flex items-center justify-center bg-green-600 hover:bg-green-700"

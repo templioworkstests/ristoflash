@@ -89,6 +89,17 @@ export interface Table {
   updated_at: string | null
 }
 
+export interface TableToken {
+  id: string
+  restaurant_id: string
+  table_id: string
+  token: string
+  expires_at: string
+  revoked: boolean
+  created_at: string | null
+  last_used_at: string | null
+}
+
 export interface Order {
   id: string
   restaurant_id: string

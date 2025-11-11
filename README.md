@@ -73,6 +73,11 @@ Per garantire la sicurezza, implementa le seguenti politiche RLS in Supabase:
 - Carrello e ordinazione
 - Funzione "Chiamata Cameriere"
 
+### QR dinamici
+- I QR stampati puntano a `/qr/:restaurantId/:tableId` e generano un token di sessione valido per 2 ore.
+- I token sono salvati in `table_tokens` e vengono invalidati automaticamente allo scadere o quando viene richiesto un nuovo QR.
+- L'edge function `api/qr/[restaurantId]/[tableId].ts` utilizza `SUPABASE_SERVICE_ROLE_KEY`, quindi ricordati di configurare la variabile sia in locale (`.env.local`) sia su Vercel.
+
 ## Sicurezza
 
 - Tutte le chiavi sensibili devono essere salvate in `.env.local` e non committate
