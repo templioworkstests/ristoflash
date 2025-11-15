@@ -1,6 +1,5 @@
 {
   "rewrites": [
-    { "source": "/qr/(.*)", "destination": "/api/qr/$1" },
     { "source": "/(.*)", "destination": "/" }
   ]
 }

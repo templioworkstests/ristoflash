@@ -20,17 +20,45 @@ export function QRRedirect() {
       }
 
       try {
-        // In produzione, Vercel dovrebbe intercettare /qr/... prima di React Router
-        // Se siamo qui, significa che React Router ha catturato la route
-        // Proviamo a chiamare direttamente l'API edge function
         const isProduction = import.meta.env.PROD
         
         if (isProduction) {
-          // In produzione, Vercel dovrebbe intercettare /qr/... prima di React Router
-          // Se siamo qui, significa che React Router ha catturato la route
-          // Facciamo un redirect completo all'API che gestirà il redirect 302
-          window.location.href = `/api/qr/${restaurantId}/${tableId}`
-          return
+          // In produzione, chiama l'API edge function
+          // L'API farà un redirect 302, ma dobbiamo seguirlo manualmente
+          try {
+            const response = await fetch(`/api/qr/${restaurantId}/${tableId}`, {
+              method: 'GET',
+              redirect: 'manual', // Non seguire automaticamente i redirect
+            })
+            
+            // Se c'è un redirect (status 302), prendi l'URL dal header Location
+            if (response.status === 302 || response.status === 301) {
+              const location = response.headers.get('Location')
+              if (location) {
+                window.location.href = location
+                return
+              }
+            }
+            
+            // Se non c'è redirect ma la risposta è OK, potrebbe essere un errore JSON
+            if (response.ok) {
+              const data = await response.json().catch(() => null)
+              if (data?.error) {
+                throw new Error(data.error)
+              }
+            }
+            
+            // Se non c'è Location header, prova a costruire l'URL manualmente
+            // Questo è un fallback nel caso l'edge function non funzioni
+            throw new Error('Redirect non ricevuto dall\'API')
+          } catch (fetchError: any) {
+            console.error('Error calling API:', fetchError)
+            // Fallback: genera il token lato client (richiede service role key in env)
+            // Ma in produzione non dovremmo avere la service role key nel frontend
+            setError('Impossibile generare il token. Verifica la configurazione del server.')
+            setLoading(false)
+            return
+          }
         }
 
         // In sviluppo, genera il token direttamente

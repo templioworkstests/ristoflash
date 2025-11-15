@@ -19,12 +19,6 @@ import { QRRedirect } from './pages/customer/QRRedirect'
 import { Unauthorized } from './pages/Unauthorized'
 
 function App() {
-  // In produzione, Vercel gestisce /qr/... tramite rewrite, quindi non aggiungiamo la route React
-  // In sviluppo, aggiungiamo la route per gestire /qr/... lato client
-  const qrRoute = import.meta.env.DEV ? (
-    <Route path="/qr/:restaurantId/:tableId" element={<QRRedirect />} />
-  ) : null
-
   return (
     <BrowserRouter
       future={{
@@ -38,8 +32,8 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/unauthorized" element={<Unauthorized />} />
         
-        {/* QR Code Redirect Route - only in development, in production Vercel handles it */}
-        {qrRoute}
+        {/* QR Code Redirect Route - handles /qr/... and redirects to API */}
+        <Route path="/qr/:restaurantId/:tableId" element={<QRRedirect />} />
         
         {/* Customer Route (No auth required) */}
         <Route path="/:restaurantId/:tableId" element={<CustomerMenu />} />
