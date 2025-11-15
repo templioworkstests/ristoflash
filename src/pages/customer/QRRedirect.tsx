@@ -20,16 +20,16 @@ export function QRRedirect() {
       }
 
       try {
-        // In produzione, l'API edge function gestirà questo
-        // In sviluppo, generiamo il token lato client
+        // In produzione, Vercel dovrebbe intercettare /qr/... prima di React Router
+        // Se siamo qui, significa che React Router ha catturato la route
+        // Proviamo a chiamare direttamente l'API edge function
         const isProduction = import.meta.env.PROD
-        const apiUrl = isProduction 
-          ? `/api/qr/${restaurantId}/${tableId}`
-          : null
-
-        if (isProduction && apiUrl) {
-          // In produzione, fai redirect all'API che gestirà tutto
-          window.location.href = apiUrl
+        
+        if (isProduction) {
+          // In produzione, Vercel dovrebbe intercettare /qr/... prima di React Router
+          // Se siamo qui, significa che React Router ha catturato la route
+          // Facciamo un redirect completo all'API che gestirà il redirect 302
+          window.location.href = `/api/qr/${restaurantId}/${tableId}`
           return
         }
 

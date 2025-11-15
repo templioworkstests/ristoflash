@@ -73,7 +73,16 @@ export default async function handler(
 
   if (insertError) {
     console.error('Failed to create table token', insertError)
-    return new Response('Unable to generate token', { status: 500 })
+    return new Response(
+      JSON.stringify({ 
+        error: 'Unable to generate token', 
+        details: insertError.message 
+      }), 
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
   }
 
   const requestUrl = new URL(req.url)
