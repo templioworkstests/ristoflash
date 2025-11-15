@@ -9,7 +9,7 @@ const TOKEN_TTL_MS = 1000 * 60 * 60 * 2 // 2 hours
 
 export default async function handler(
   req: Request,
-  context: { params: { restaurantId?: string; tableId?: string } }
+  context?: { params?: { restaurantId?: string; tableId?: string } }
 ) {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -18,8 +18,26 @@ export default async function handler(
     return new Response('Supabase environment variables missing', { status: 500 })
   }
 
-  const restaurantId = context.params.restaurantId
-  const tableId = context.params.tableId
+  // Prova prima con context.params, poi estrai dall'URL come fallback
+  let restaurantId: string | undefined = context?.params?.restaurantId
+  let tableId: string | undefined = context?.params?.tableId
+
+  // Se i parametri non sono in context.params, estraili dall'URL
+  if (!restaurantId || !tableId) {
+    const url = new URL(req.url)
+    const pathParts = url.pathname.split('/').filter(Boolean)
+    
+    // Pattern: /qr/restaurantId/tableId o /api/qr/restaurantId/tableId
+    const qrIndex = pathParts.indexOf('qr')
+    if (qrIndex !== -1 && pathParts.length > qrIndex + 2) {
+      restaurantId = pathParts[qrIndex + 1]
+      tableId = pathParts[qrIndex + 2]
+    } else if (pathParts.length >= 2) {
+      // Fallback: assume che i primi due segmenti siano restaurantId e tableId
+      restaurantId = pathParts[0]
+      tableId = pathParts[1]
+    }
+  }
 
   if (!restaurantId || !tableId) {
     return new Response('Missing restaurant or table id', { status: 400 })
@@ -64,4 +82,5 @@ export default async function handler(
 
   return Response.redirect(destination.toString(), 302)
 }
+
 

@@ -64,3 +64,4 @@ SET search_path = public;
 GRANT EXECUTE ON FUNCTION validate_table_token(TEXT) TO anon;
 GRANT EXECUTE ON FUNCTION validate_table_token(TEXT) TO authenticated;
 
+

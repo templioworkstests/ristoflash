@@ -540,11 +540,61 @@ export function CustomerMenu() {
     return false
   }
 
+  async function validateToken(): Promise<boolean> {
+    if (!token) {
+      setTokenStatus('invalid')
+      setTokenErrorKey('tokenMissing')
+      toast.error(t('tokenMissing'))
+      return false
+    }
+
+    try {
+      const { data, error: tokenError } = await supabase.rpc('validate_table_token', { 
+        p_token: token as string 
+      })
+
+      if (tokenError) {
+        console.error('Token validation error:', tokenError)
+        setTokenStatus('invalid')
+        setTokenErrorKey('tokenInvalid')
+        toast.error(t('tokenInvalid'))
+        return false
+      }
+
+      const record = Array.isArray(data) ? data[0] : null
+
+      if (
+        !record ||
+        record.table_id !== tableId ||
+        record.restaurant_id !== restaurantId
+      ) {
+        setTokenStatus('invalid')
+        setTokenErrorKey('tokenInvalid')
+        toast.error(t('tokenInvalid'))
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('Token validation exception:', error)
+      setTokenStatus('invalid')
+      setTokenErrorKey('tokenValidationError')
+      toast.error(t('tokenValidationError'))
+      return false
+    }
+  }
+
   async function placeOrder() {
     if (!restaurantId || !tableId || cart.length === 0) return
 
     if (!ensurePartySize()) {
       toast.error(t('partySizeMissing'))
+      return
+    }
+
+    // Valida il token prima di permettere l'ordine
+    const isValid = await validateToken()
+    if (!isValid) {
       return
     }
 
@@ -605,6 +655,12 @@ export function CustomerMenu() {
 
   async function callWaiter() {
     if (!restaurantId || !tableId) return
+
+    // Valida il token prima di permettere la chiamata cameriere
+    const isValid = await validateToken()
+    if (!isValid) {
+      return
+    }
 
     try {
       const { error } = await supabase

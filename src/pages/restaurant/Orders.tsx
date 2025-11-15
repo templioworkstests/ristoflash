@@ -203,7 +203,12 @@ export function RestaurantOrders() {
         .update({ status })
         .eq('order_id', orderId)
 
-      toast.success('Stato ordine aggiornato')
+      if (status === 'paid') {
+        toast.success('Ordine pagato')
+      } else {
+        toast.success('Stato ordine aggiornato')
+      }
+      
       if (restaurantId) {
         fetchOrders(restaurantId)
       }
@@ -212,8 +217,35 @@ export function RestaurantOrders() {
     }
   }
 
+  async function revokeTableTokens(tableId: string) {
+    if (!restaurantId) return
+    
+    try {
+      // Revoca tutti i token attivi per questo tavolo
+      const { error } = await supabase
+        .from('table_tokens')
+        .update({ revoked: true })
+        .eq('restaurant_id', restaurantId)
+        .eq('table_id', tableId)
+        .eq('revoked', false)
+
+      if (error) {
+        console.error('Error revoking table tokens:', error)
+        // Non mostriamo errore all'utente, è un'operazione secondaria
+      }
+    } catch (error) {
+      console.error('Error revoking table tokens:', error)
+    }
+  }
+
   async function markAsPaid(orderId: string, method: 'cash' | 'card' = 'cash') {
     await updateOrderStatus(orderId, 'paid', method)
+    
+    // Trova il table_id dell'ordine e revoca i token
+    const order = orders.find(o => o.id === orderId)
+    if (order) {
+      await revokeTableTokens(order.table_id)
+    }
   }
 
   function openPaymentModal(order: RestaurantOrder) {
@@ -289,7 +321,10 @@ export function RestaurantOrders() {
 
       if (itemsError) throw itemsError
 
-      toast.success('Tavolo pagato e svuotato')
+      // Revoca i token del QR code per questo tavolo
+      await revokeTableTokens(tableId)
+
+      toast.success('Tavolo pagato e svuotato. QR code invalidato.')
       fetchOrders(restaurantId)
     } catch (error: any) {
       toast.error(error.message || 'Errore durante il pagamento del tavolo')

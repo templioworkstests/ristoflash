@@ -15,6 +15,7 @@ import { RestaurantPayments } from './pages/restaurant/Payments'
 import { RestaurantAnalytics } from './pages/restaurant/Analytics'
 import { RestaurantStaff } from './pages/restaurant/Staff'
 import { CustomerMenu } from './pages/customer/Menu'
+import { QRRedirect } from './pages/customer/QRRedirect'
 import { Unauthorized } from './pages/Unauthorized'
 
 function App() {
@@ -30,6 +31,9 @@ function App() {
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/unauthorized" element={<Unauthorized />} />
+        
+        {/* QR Code Redirect Route - generates token and redirects to customer menu */}
+        <Route path="/qr/:restaurantId/:tableId" element={<QRRedirect />} />
         
         {/* Customer Route (No auth required) */}
         <Route path="/:restaurantId/:tableId" element={<CustomerMenu />} />
