@@ -89,6 +89,31 @@ export default async function handler(
   const destination = new URL(`/${restaurantId}/${tableId}`, requestUrl.origin)
   destination.searchParams.set('token', token)
 
+  // Se la richiesta viene da fetch (ha header Accept: application/json), restituisci JSON
+  // Altrimenti fai un redirect 302 per compatibilità con richieste dirette del browser
+  const acceptHeader = req.headers.get('Accept') || ''
+  const isJsonRequest = acceptHeader.includes('application/json') || 
+                        req.headers.get('X-Requested-With') === 'XMLHttpRequest'
+
+  if (isJsonRequest) {
+    return new Response(
+      JSON.stringify({ 
+        redirectUrl: destination.toString(),
+        token 
+      }), 
+      { 
+        status: 200,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
+      }
+    )
+  }
+
+  // Per richieste dirette del browser, fai un redirect 302
   return Response.redirect(destination.toString(), 302)
 }
 

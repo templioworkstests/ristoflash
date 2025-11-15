@@ -24,38 +24,36 @@ export function QRRedirect() {
         
         if (isProduction) {
           // In produzione, chiama l'API edge function
-          // L'API farà un redirect 302, ma dobbiamo seguirlo manualmente
+          // L'API restituirà JSON con l'URL di destinazione
           try {
             const response = await fetch(`/api/qr/${restaurantId}/${tableId}`, {
               method: 'GET',
-              redirect: 'manual', // Non seguire automaticamente i redirect
+              headers: {
+                'Accept': 'application/json',
+              },
             })
             
-            // Se c'è un redirect (status 302), prendi l'URL dal header Location
-            if (response.status === 302 || response.status === 301) {
-              const location = response.headers.get('Location')
-              if (location) {
-                window.location.href = location
-                return
-              }
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({ error: 'Errore sconosciuto' }))
+              throw new Error(errorData.error || `Errore ${response.status}`)
             }
             
-            // Se non c'è redirect ma la risposta è OK, potrebbe essere un errore JSON
-            if (response.ok) {
-              const data = await response.json().catch(() => null)
-              if (data?.error) {
-                throw new Error(data.error)
-              }
+            const data = await response.json()
+            
+            if (data.redirectUrl) {
+              // Redirect all'URL ricevuto dall'API
+              window.location.href = data.redirectUrl
+              return
             }
             
-            // Se non c'è Location header, prova a costruire l'URL manualmente
-            // Questo è un fallback nel caso l'edge function non funzioni
-            throw new Error('Redirect non ricevuto dall\'API')
+            if (data.error) {
+              throw new Error(data.error)
+            }
+            
+            throw new Error('Risposta API non valida')
           } catch (fetchError: any) {
             console.error('Error calling API:', fetchError)
-            // Fallback: genera il token lato client (richiede service role key in env)
-            // Ma in produzione non dovremmo avere la service role key nel frontend
-            setError('Impossibile generare il token. Verifica la configurazione del server.')
+            setError(fetchError.message || 'Impossibile generare il token. Verifica la configurazione del server.')
             setLoading(false)
             return
           }
