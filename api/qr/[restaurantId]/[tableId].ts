@@ -11,11 +11,32 @@ export default async function handler(
   req: Request,
   context?: { params?: { restaurantId?: string; tableId?: string } }
 ) {
+  // Gestisci richieste OPTIONS per CORS
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Accept',
+      },
+    })
+  }
+
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return new Response('Supabase environment variables missing', { status: 500 })
+    return new Response(
+      JSON.stringify({ error: 'Supabase environment variables missing' }), 
+      { 
+        status: 500,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      }
+    )
   }
 
   // Prova prima con context.params, poi estrai dall'URL come fallback
@@ -40,7 +61,16 @@ export default async function handler(
   }
 
   if (!restaurantId || !tableId) {
-    return new Response('Missing restaurant or table id', { status: 400 })
+    return new Response(
+      JSON.stringify({ error: 'Missing restaurant or table id' }), 
+      { 
+        status: 400,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      }
+    )
   }
 
   const supabase = createClient<Database>(supabaseUrl, serviceRoleKey, {
