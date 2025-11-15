@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/api/qr/(.*)", "destination": "/api/qr/$1" },
+    { "source": "/api/qr/:restaurantId/:tableId", "destination": "/api/qr" },
     { "source": "/(.*)", "destination": "/" }
   ]
 }
