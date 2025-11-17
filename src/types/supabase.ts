@@ -317,7 +317,10 @@ export type Database = {
           id: string
           logo_url: string | null
           name: string
+          order_cooldown_enabled: boolean
+          order_cooldown_minutes: number
           phone: string | null
+          prepayment_required: boolean
           primary_color: string | null
           subscription_plan: string | null
           subscription_status: string
@@ -333,7 +336,10 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name: string
+          order_cooldown_enabled?: boolean
+          order_cooldown_minutes?: number
           phone?: string | null
+          prepayment_required?: boolean
           primary_color?: string | null
           subscription_plan?: string | null
           subscription_status?: string
@@ -349,7 +355,10 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name?: string
+          order_cooldown_enabled?: boolean
+          order_cooldown_minutes?: number
           phone?: string | null
+          prepayment_required?: boolean
           primary_color?: string | null
           subscription_plan?: string | null
           subscription_status?: string
