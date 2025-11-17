@@ -16,11 +16,20 @@ export function RestaurantOrders() {
   const [products, setProducts] = useState<Record<string, Product>>({})
   const [loading, setLoading] = useState(true)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
+  const [stats, setStats] = useState({
+    pendingOrders: 0,
+    preparingOrders: 0,
+    readyOrders: 0,
+    activeWaiterCalls: 0,
+  })
   const [selectedOrder] = useState<string | null>(null)
   const [isPaymentModalOpen, setPaymentModalOpen] = useState(false)
   const [paymentOrder, setPaymentOrder] = useState<RestaurantOrder | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash')
   const [editingOrder, setEditingOrder] = useState<RestaurantOrder | null>(null)
+  const [showWaiterCalls, setShowWaiterCalls] = useState(false)
+  const [waiterCalls, setWaiterCalls] = useState<Array<{ id: string; table_id: string; table_name: string; created_at: string | null }>>([])
+  const [loadingCalls, setLoadingCalls] = useState(false)
 
   useEffect(() => {
     let channel: any = null
@@ -31,6 +40,7 @@ export function RestaurantOrders() {
         setRestaurantId(user.restaurant_id)
         await fetchProducts(user.restaurant_id)
         await fetchOrders(user.restaurant_id)
+        await fetchStats(user.restaurant_id)
         
         // Setup realtime subscription
         channel = supabase
@@ -46,6 +56,7 @@ export function RestaurantOrders() {
             () => {
               if (user.restaurant_id) {
                 fetchOrders(user.restaurant_id)
+                fetchStats(user.restaurant_id)
               }
             }
           )
@@ -59,6 +70,24 @@ export function RestaurantOrders() {
             () => {
               if (user.restaurant_id) {
                 fetchOrders(user.restaurant_id)
+                fetchStats(user.restaurant_id)
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'waiter_calls',
+              filter: `restaurant_id=eq.${user.restaurant_id}`,
+            },
+            () => {
+              if (user.restaurant_id) {
+                fetchStats(user.restaurant_id)
+                if (showWaiterCalls) {
+                  fetchWaiterCalls(user.restaurant_id)
+                }
               }
             }
           )
@@ -148,11 +177,82 @@ export function RestaurantOrders() {
       if (ordersWithItems.some(o => o.status === 'pending')) {
         playNotificationSound()
       }
+      // Update counters from current orders
+      setStats(prev => ({
+        ...prev,
+        pendingOrders: ordersWithItems.filter(o => o.status === 'pending').length,
+        preparingOrders: ordersWithItems.filter(o => o.status === 'preparing').length,
+        readyOrders: ordersWithItems.filter(o => o.status === 'ready').length,
+      }))
     } catch (error: any) {
       toast.error('Errore nel caricamento degli ordini')
       console.error(error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function fetchStats(restId: string) {
+    try {
+      // Active waiter calls
+      const { data: calls, error: callsError } = await supabase
+        .from('waiter_calls')
+        .select('id')
+        .eq('restaurant_id', restId)
+        .eq('status', 'active')
+      if (callsError) throw callsError
+      setStats(prev => ({
+        ...prev,
+        activeWaiterCalls: calls?.length || 0,
+      }))
+    } catch (error) {
+      // Non-bloccante
+      console.warn('Errore nel caricamento delle chiamate cameriere:', error)
+    }
+  }
+
+  async function fetchWaiterCalls(restId: string) {
+    try {
+      setLoadingCalls(true)
+      const { data, error } = await supabase
+        .from('waiter_calls')
+        .select('id, table_id, created_at, tables!inner(id, name)')
+        .eq('restaurant_id', restId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      const list =
+        (data || []).map((row: any) => ({
+          id: row.id as string,
+          table_id: row.table_id as string,
+          table_name: (row as any).tables?.name ?? 'Tavolo',
+          created_at: row.created_at as string | null,
+        })) ?? []
+      setWaiterCalls(list)
+    } catch (error: any) {
+      console.error('Errore caricamento chiamate:', error)
+      toast.error(error.message || 'Errore nel caricamento delle chiamate')
+    } finally {
+      setLoadingCalls(false)
+    }
+  }
+
+  async function resolveWaiterCall(callId: string) {
+    if (!restaurantId) return
+    try {
+      const { error } = await supabase
+        .from('waiter_calls')
+        .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+        .eq('id', callId)
+      if (error) throw error
+      toast.success('Chiamata risolta')
+      fetchStats(restaurantId)
+      if (showWaiterCalls) {
+        fetchWaiterCalls(restaurantId)
+      }
+    } catch (error: any) {
+      console.error('Errore risoluzione chiamata:', error)
+      toast.error(error.message || 'Errore durante la risoluzione')
     }
   }
 
@@ -482,6 +582,62 @@ export function RestaurantOrders() {
       )}
 
     <div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div className="card">
+          <div className="flex items-center">
+            <div className="p-3 bg-yellow-100 rounded-lg">
+              <div className="h-6 w-6 text-yellow-600">⏳</div>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Ordini in Attesa</p>
+              <p className="text-2xl font-semibold text-gray-900">{stats.pendingOrders}</p>
+            </div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="flex items-center">
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <div className="h-6 w-6 text-blue-600">👨‍🍳</div>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">In Preparazione</p>
+              <p className="text-2xl font-semibold text-gray-900">{stats.preparingOrders}</p>
+            </div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="flex items-center">
+            <div className="p-3 bg-green-100 rounded-lg">
+              <div className="h-6 w-6 text-green-600">✅</div>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Pronti</p>
+              <p className="text-2xl font-semibold text-gray-900">{stats.readyOrders}</p>
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="card text-left transition hover:shadow-md"
+          onClick={async () => {
+            if (restaurantId) {
+              await fetchWaiterCalls(restaurantId)
+            }
+            setShowWaiterCalls(true)
+          }}
+          title="Vedi chiamate cameriere"
+        >
+          <div className="flex items-center">
+            <div className="p-3 bg-red-100 rounded-lg">
+              <div className="h-6 w-6 text-red-600">🔔</div>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Chiamate Cameriere</p>
+              <p className="text-2xl font-semibold text-gray-900">{stats.activeWaiterCalls}</p>
+            </div>
+          </div>
+        </button>
+      </div>
       <h1 className="text-3xl font-bold text-gray-900 mb-6">Ordini in Tempo Reale</h1>
 
       <div className="space-y-6">
@@ -599,6 +755,79 @@ export function RestaurantOrders() {
         )}
       </div>
     </div>
+
+    {showWaiterCalls && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl">
+          <div className="flex items-center justify-between border-b px-6 py-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Chiamate Cameriere</h3>
+              <p className="text-sm text-gray-500">Elenco chiamate attive dai tavoli</p>
+            </div>
+            <button
+              onClick={() => setShowWaiterCalls(false)}
+              className="text-gray-500 hover:text-gray-700"
+              title="Chiudi"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="px-6 py-4">
+            {loadingCalls ? (
+              <div className="flex justify-center py-10">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div>
+              </div>
+            ) : waiterCalls.length === 0 ? (
+              <div className="text-center py-10 text-gray-500">Nessuna chiamata attiva</div>
+            ) : (
+              <div className="divide-y">
+                {waiterCalls.map(call => (
+                  <div key={call.id} className="flex items-center justify-between py-4">
+                    <div>
+                      <p className="font-medium text-gray-900">Tavolo {call.table_name}</p>
+                      <p className="text-sm text-gray-600">
+                        {call.created_at
+                          ? new Date(call.created_at).toLocaleString('it-IT', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              day: '2-digit',
+                              month: '2-digit',
+                            })
+                          : '-'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => resolveWaiterCall(call.id)}
+                        className="btn btn-primary"
+                      >
+                        Chiudi chiamata
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 border-t bg-gray-50 px-6 py-4">
+            <button
+              onClick={() => setShowWaiterCalls(false)}
+              className="btn btn-secondary"
+            >
+              Chiudi
+            </button>
+            <button
+              onClick={() => {
+                if (restaurantId) fetchWaiterCalls(restaurantId)
+              }}
+              className="btn btn-primary"
+            >
+              Aggiorna
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </>
   )
 }

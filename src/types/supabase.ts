@@ -568,6 +568,10 @@ export type Database = {
           expires_at: string
         }>
       }
+      request_waiter_call: {
+        Args: { p_token: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

@@ -14,6 +14,9 @@ export interface Restaurant {
   email: string | null
   logo_url: string | null
   primary_color: string | null
+  prepayment_required?: boolean
+  order_cooldown_enabled?: boolean
+  order_cooldown_minutes?: number | null
   all_you_can_eat_enabled: boolean
   all_you_can_eat_lunch_price: number | null
   all_you_can_eat_dinner_price: number | null

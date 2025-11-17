@@ -1,7 +1,7 @@
 import { ChangeEvent, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/utils/auth'
-import { Category, Product, Restaurant } from '@/types/database'
+import { Category, Product } from '@/types/database'
 import { Plus, Edit, Trash2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
@@ -28,12 +28,7 @@ export function RestaurantMenu() {
   })
   const [productImageFile, setProductImageFile] = useState<File | null>(null)
   const [productImagePreview, setProductImagePreview] = useState<string | null>(null)
-  const [allYouCanEatSettings, setAllYouCanEatSettings] = useState({
-    enabled: false,
-    lunchPrice: '',
-    dinnerPrice: '',
-  })
-  const [savingAllYouCanEat, setSavingAllYouCanEat] = useState(false)
+  // AYCE impostazioni ristorante spostate nella Dashboard Impostazioni
 
   const revokePreview = (url: string | null) => {
     if (url && url.startsWith('blob:')) {
@@ -117,7 +112,6 @@ export function RestaurantMenu() {
         }
 
         setRestaurantId(user.restaurant_id)
-        await fetchRestaurantSettings(user.restaurant_id)
         await fetchCategories(user.restaurant_id)
         await fetchProducts(user.restaurant_id)
       } catch (error: any) {
@@ -151,123 +145,7 @@ export function RestaurantMenu() {
     }
   }
 
-  async function fetchRestaurantSettings(restId: string) {
-    try {
-      const { data, error } = await supabase
-        .from('restaurants')
-        .select('all_you_can_eat_enabled, all_you_can_eat_lunch_price, all_you_can_eat_dinner_price')
-        .eq('id', restId)
-        .single<Pick<Restaurant, 'all_you_can_eat_enabled' | 'all_you_can_eat_lunch_price' | 'all_you_can_eat_dinner_price'>>()
-
-      if (error) {
-        console.error('Restaurant settings fetch error:', error)
-        throw error
-      }
-
-      if (data) {
-        setAllYouCanEatSettings({
-          enabled: data.all_you_can_eat_enabled,
-          lunchPrice: data.all_you_can_eat_lunch_price !== null ? data.all_you_can_eat_lunch_price.toString() : '',
-          dinnerPrice: data.all_you_can_eat_dinner_price !== null ? data.all_you_can_eat_dinner_price.toString() : '',
-        })
-      }
-    } catch (error: any) {
-      console.error('Error fetching restaurant settings:', error)
-      toast.error(`Errore nel caricamento delle impostazioni: ${error.message}`)
-    }
-  }
-
-  async function handleSaveAllYouCanEat() {
-    if (!restaurantId) return
-
-    try {
-      setSavingAllYouCanEat(true)
-
-      if (!allYouCanEatSettings.enabled) {
-        console.log('Saving AYCE: disabling for restaurant', restaurantId)
-        const { error } = await supabase
-          .from('restaurants')
-          .update({
-            all_you_can_eat_enabled: false,
-            all_you_can_eat_lunch_price: null,
-            all_you_can_eat_dinner_price: null,
-          })
-          .eq('id', restaurantId)
-
-        if (error) {
-          console.error('Error updating All You Can Eat settings:', error)
-          throw error
-        }
-
-        setAllYouCanEatSettings({
-          enabled: false,
-          lunchPrice: '',
-          dinnerPrice: '',
-        })
-
-        toast.success('Modalità All You Can Eat disattivata')
-        await fetchRestaurantSettings(restaurantId)
-        return
-      }
-
-      if (!allYouCanEatSettings.lunchPrice || !allYouCanEatSettings.dinnerPrice) {
-        toast.error('Inserisci sia il prezzo pranzo che il prezzo cena')
-        return
-      }
-
-      const normalizedLunch = allYouCanEatSettings.lunchPrice.replace(',', '.').trim()
-      const normalizedDinner = allYouCanEatSettings.dinnerPrice.replace(',', '.').trim()
-
-      const lunchValue = parseFloat(normalizedLunch)
-      const dinnerValue = parseFloat(normalizedDinner)
-
-      if (Number.isNaN(lunchValue) || Number.isNaN(dinnerValue)) {
-        toast.error('I prezzi inseriti non sono validi. Usa il punto come separatore decimale (es. 15.90).')
-        return
-      }
-
-      if (lunchValue < 0 || dinnerValue < 0) {
-        toast.error('I prezzi devono essere maggiori o uguali a zero.')
-        return
-      }
-
-      console.log('Saving AYCE: enabling', {
-        restaurantId,
-        lunchValue,
-        dinnerValue,
-        rawLunch: allYouCanEatSettings.lunchPrice,
-        rawDinner: allYouCanEatSettings.dinnerPrice,
-      })
-
-      const { error } = await supabase
-        .from('restaurants')
-        .update({
-          all_you_can_eat_enabled: allYouCanEatSettings.enabled,
-          all_you_can_eat_lunch_price: lunchValue,
-          all_you_can_eat_dinner_price: dinnerValue,
-        })
-        .eq('id', restaurantId)
-
-      if (error) {
-        console.error('Error updating All You Can Eat settings:', error)
-        throw error
-      }
-
-      setAllYouCanEatSettings((prev) => ({
-        ...prev,
-        enabled: true,
-        lunchPrice: normalizedLunch,
-        dinnerPrice: normalizedDinner,
-      }))
-
-      toast.success('Impostazioni aggiornate')
-      await fetchRestaurantSettings(restaurantId)
-    } catch (error: any) {
-      toast.error(error.message || 'Errore nel salvataggio delle impostazioni')
-    } finally {
-      setSavingAllYouCanEat(false)
-    }
-  }
+  // Impostazioni AYCE ristorante rimosse da qui (ora in Dashboard)
 
   async function fetchProducts(restId: string) {
     try {
@@ -342,8 +220,7 @@ export function RestaurantMenu() {
         return
       }
 
-      const limitEnabled =
-        (allYouCanEatSettings.enabled || productForm.ayceLimitEnabled) && productForm.ayceLimitEnabled
+      const limitEnabled = productForm.ayceLimitEnabled
       let limitQuantityValue: number | null = null
 
       if (limitEnabled) {
@@ -514,7 +391,7 @@ export function RestaurantMenu() {
     ? products.filter(p => p.category_id === selectedCategory)
     : products
 
-  const canEditAyceLimit = allYouCanEatSettings.enabled || productForm.ayceLimitEnabled
+  const canEditAyceLimit = true
 
   if (loading) {
     return (
@@ -566,98 +443,7 @@ export function RestaurantMenu() {
         </div>
       </div>
 
-      <div className="card mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">Modalità All You Can Eat</h2>
-            <p className="text-sm text-gray-600">
-              Attiva questa modalità per applicare un prezzo fisso a pranzo e cena.
-            </p>
-          </div>
-          <label className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">Disattiva</span>
-            <div className="relative inline-flex items-center">
-              <input
-                type="checkbox"
-                className="sr-only"
-                checked={allYouCanEatSettings.enabled}
-                onChange={(event) => {
-                  const enabled = event.target.checked
-                  setAllYouCanEatSettings((prev) => ({
-                    ...prev,
-                    enabled,
-                    lunchPrice: enabled ? prev.lunchPrice : '',
-                    dinnerPrice: enabled ? prev.dinnerPrice : '',
-                  }))
-                }}
-              />
-              <div
-                className={`relative w-12 h-6 rounded-full transition-colors ${
-                  allYouCanEatSettings.enabled ? 'bg-primary-600' : 'bg-gray-300'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-1 w-5 h-5 bg-white rounded-full shadow transform transition-transform ${
-                    allYouCanEatSettings.enabled ? 'translate-x-6' : ''
-                  }`}
-                />
-              </div>
-            </div>
-            <span className="text-sm font-medium text-gray-700">Attiva</span>
-          </label>
-        </div>
-
-        {allYouCanEatSettings.enabled && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Prezzo pranzo (€)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                className="input mt-1"
-                placeholder="Es. 15.90"
-                value={allYouCanEatSettings.lunchPrice}
-                onChange={(event) =>
-                  setAllYouCanEatSettings((prev) => ({
-                    ...prev,
-                    lunchPrice: event.target.value,
-                  }))
-                }
-                disabled={savingAllYouCanEat}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Prezzo cena (€)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                className="input mt-1"
-                placeholder="Es. 22.50"
-                value={allYouCanEatSettings.dinnerPrice}
-                onChange={(event) =>
-                  setAllYouCanEatSettings((prev) => ({
-                    ...prev,
-                    dinnerPrice: event.target.value,
-                  }))
-                }
-                disabled={savingAllYouCanEat}
-              />
-            </div>
-          </div>
-        )}
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={handleSaveAllYouCanEat}
-            className="btn btn-primary"
-            disabled={savingAllYouCanEat}
-          >
-            {savingAllYouCanEat ? 'Salvataggio...' : 'Salva impostazioni'}
-          </button>
-        </div>
-      </div>
+      {/* Impostazioni AYCE spostate: sezione rimossa */}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-1">

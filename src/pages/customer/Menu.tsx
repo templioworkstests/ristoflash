@@ -84,6 +84,12 @@ const translations = {
     tokenRetry: 'Riprova',
     restaurantNotFoundTitle: 'Ristorante non trovato',
     restaurantNotFoundSubtitle: 'Verifica che il QR code sia corretto',
+    prepayNoticeTitle: 'Pagamento anticipato richiesto',
+    prepayNoticeBody: 'Dopo aver inviato l\'ordine devi recarti subito in cassa a pagarlo, altrimenti non sarai servito.',
+    prepayNoticeCta: 'Ho capito',
+    cooldownTitle: 'Attendi prima di un nuovo ordine',
+    cooldownSubtitle: 'Per favore attendi {minutes}:{seconds} prima di poter inviare un nuovo ordine.',
+    cooldownCta: 'OK',
   },
   en: {
     orderPlacedTitle: 'Order Sent!',
@@ -153,6 +159,12 @@ const translations = {
     tokenRetry: 'Try again',
     restaurantNotFoundTitle: 'Restaurant not found',
     restaurantNotFoundSubtitle: 'Check that the QR code is correct',
+    prepayNoticeTitle: 'Prepayment required',
+    prepayNoticeBody: 'After sending your order, you must immediately go to the cashier to pay it, otherwise you will not be served.',
+    prepayNoticeCta: 'Got it',
+    cooldownTitle: 'Please wait before ordering again',
+    cooldownSubtitle: 'Please wait {minutes}:{seconds} before you can send a new order.',
+    cooldownCta: 'OK',
   },
 } as const
 
@@ -222,10 +234,14 @@ export function CustomerMenu() {
   const languageMenuRef = useRef<HTMLDivElement | null>(null)
   const [tokenStatus, setTokenStatus] = useState<'pending' | 'valid' | 'invalid'>('pending')
   const [tokenErrorKey, setTokenErrorKey] = useState<TranslationKey | null>(null)
+  const [showPrepayNotice, setShowPrepayNotice] = useState(false)
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null)
+  const [showCooldown, setShowCooldown] = useState(false)
+  const [nowTick, setNowTick] = useState<number>(Date.now())
 
   const t = (key: TranslationKey, vars?: Record<string, string | number>) => {
     const dictionary = translations[language] ?? translations.it
-    let template = dictionary[key] ?? translations.it[key]
+    const template = dictionary[key] ?? translations.it[key]
     if (!template) return key
     if (!vars) return template
     return template.replace(/\{(\w+)\}/g, (match, token) => {
@@ -374,6 +390,67 @@ export function CustomerMenu() {
       setShowPartySizeModal(true)
     }
   }, [loading, partySize, tokenStatus])
+
+  // Restore order cooldown from storage if present and enabled
+  useEffect(() => {
+    if (!tableId || tokenStatus !== 'valid') return
+    try {
+      const raw = localStorage.getItem(`orderCooldownEnd:${tableId}`)
+      const end = raw ? parseInt(raw, 10) : 0
+      if (end && end > Date.now() && restaurant?.order_cooldown_enabled) {
+        setCooldownUntil(end)
+        setShowCooldown(true)
+      }
+    } catch (_e) {
+      void 0
+    }
+  }, [tableId, tokenStatus, restaurant?.order_cooldown_enabled])
+
+  // Tick every second for countdown
+  useEffect(() => {
+    if (!showCooldown || !cooldownUntil) return
+    const id = setInterval(() => {
+      setNowTick(Date.now())
+    }, 1000)
+    return () => clearInterval(id)
+  }, [showCooldown, cooldownUntil])
+
+  const remainingMs = cooldownUntil ? Math.max(0, cooldownUntil - nowTick) : 0
+  const remainingTotalSec = Math.ceil(remainingMs / 1000)
+  const remainingMin = Math.floor(remainingTotalSec / 60)
+  const remainingSec = remainingTotalSec % 60
+
+  // Cleanup when cooldown expires
+  useEffect(() => {
+    if (!tableId) return
+    if (!cooldownUntil) return
+    if (remainingTotalSec === 0) {
+      try {
+        localStorage.removeItem(`orderCooldownEnd:${tableId}`)
+      } catch (_e) {
+        void 0
+      }
+      setShowCooldown(false)
+      setCooldownUntil(null)
+    }
+  }, [remainingTotalSec, cooldownUntil, tableId])
+
+  // If party size is already set and prepayment is required, show notice once per table
+  useEffect(() => {
+    if (tokenStatus !== 'valid') return
+    if (!restaurant?.prepayment_required) return
+    if (!tableId) return
+    if (!partySize || partySize <= 0) return
+    try {
+      const ackKey = `prepayAck:${tableId}`
+      const alreadyAck = localStorage.getItem(ackKey) === '1'
+      if (!alreadyAck) {
+        setShowPrepayNotice(true)
+      }
+    } catch (_e) {
+      setShowPrepayNotice(true)
+    }
+  }, [restaurant?.prepayment_required, partySize, tableId, tokenStatus])
 
   async function loadData() {
     if (!restaurantId || !tableId || tokenStatus !== 'valid') {
@@ -587,6 +664,12 @@ export function CustomerMenu() {
   async function placeOrder() {
     if (!restaurantId || !tableId || cart.length === 0) return
 
+    // Block if cooldown active
+    if (cooldownUntil && cooldownUntil > Date.now()) {
+      setShowCooldown(true)
+      return
+    }
+
     if (!ensurePartySize()) {
       toast.error(t('partySizeMissing'))
       return
@@ -639,6 +722,18 @@ export function CustomerMenu() {
       setOrderPlaced(true)
       setCart([])
       setOrderNotes('')
+      // Set cooldown after order if enabled
+      if (restaurant?.order_cooldown_enabled) {
+        const minutes = restaurant.order_cooldown_minutes ?? 15
+        const endAt = Date.now() + minutes * 60 * 1000
+        setCooldownUntil(endAt)
+        setShowCooldown(true)
+        try {
+          localStorage.setItem(`orderCooldownEnd:${tableId}`, String(endAt))
+        } catch (_e) {
+          void 0
+        }
+      }
       if (activePartySize) {
         try {
           localStorage.setItem(`partySize:${tableId}`, activePartySize.toString())
@@ -664,14 +759,7 @@ export function CustomerMenu() {
 
     try {
       const { error } = await supabase
-        .from('waiter_calls')
-        .insert([
-          {
-            restaurant_id: restaurantId,
-            table_id: tableId,
-            status: 'active',
-          },
-        ])
+        .rpc('request_waiter_call' as any, { p_token: token as string })
 
       if (error) throw error
       toast.success(t('callWaiterSuccess'))
@@ -735,6 +823,7 @@ export function CustomerMenu() {
   }
 
   if (orderPlaced) {
+    // Keep simple success screen; cooldown overlay may appear above
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
@@ -1245,6 +1334,18 @@ export function CustomerMenu() {
                   setShowPartySizeModal(false)
                   const guestsLabel = t(parsed === 1 ? 'personSingular' : 'personPlural')
                   toast.success(t('partySizeSaved', { count: parsed, label: guestsLabel }))
+                // Show prepayment notice if required and not yet acknowledged for this table
+                try {
+                  const ackKey = `prepayAck:${tableId}`
+                  const alreadyAck = localStorage.getItem(ackKey) === '1'
+                  if (restaurant?.prepayment_required && !alreadyAck) {
+                    setShowPrepayNotice(true)
+                  }
+                } catch (_e) {
+                  if (restaurant?.prepayment_required) {
+                    setShowPrepayNotice(true)
+                  }
+                }
                 }}
               >
                 {t('confirm')}
@@ -1253,6 +1354,64 @@ export function CustomerMenu() {
           </div>
         </div>
       )}
+    {/* Prepayment full-screen notice */}
+    {showPrepayNotice && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-6">
+        <div className="max-w-lg w-full rounded-2xl bg-white p-8 text-center shadow-2xl">
+          <div className="mb-4 flex justify-center">
+            <div className="rounded-full bg-red-100 p-4">
+              <Bell className="h-10 w-10 text-red-600" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            {t('prepayNoticeTitle')}
+          </h2>
+          <p className="text-gray-700 mb-6">
+            {t('prepayNoticeBody')}
+          </p>
+          <button
+            className="btn btn-primary w-full"
+            onClick={() => {
+              try {
+                if (tableId) {
+                  localStorage.setItem(`prepayAck:${tableId}`, '1')
+                }
+              } catch (_e) {
+                void 0
+              }
+              setShowPrepayNotice(false)
+            }}
+          >
+            {t('prepayNoticeCta')}
+          </button>
+        </div>
+      </div>
+    )}
+    {/* Order cooldown full-screen overlay */}
+    {showCooldown && cooldownUntil && remainingTotalSec > 0 && (
+      <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/70 px-6">
+        <div className="max-w-lg w-full rounded-2xl bg-white p-8 text-center shadow-2xl">
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            {t('cooldownTitle')}
+          </h2>
+          <p className="text-gray-700 mb-6 text-lg">
+            {t('cooldownSubtitle', {
+              minutes: String(remainingMin).padStart(2, '0'),
+              seconds: String(remainingSec).padStart(2, '0'),
+            })}
+          </p>
+          <button
+            className="btn btn-primary w-full"
+            onClick={() => {
+              // Allow closing overlay, but placeOrder remains blocked until timer ends
+              setShowCooldown(false)
+            }}
+          >
+            {t('cooldownCta')}
+          </button>
+        </div>
+      </div>
+    )}
     </div>
   )
 }
