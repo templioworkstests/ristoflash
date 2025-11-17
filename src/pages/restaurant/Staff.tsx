@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin, supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/utils/auth'
 import { User } from '@/types/database'
 import { Plus, Edit, Trash2 } from 'lucide-react'
@@ -31,23 +31,40 @@ export function RestaurantStaff() {
 
   async function fetchStaff(restId: string) {
     try {
-      const admin = getSupabaseAdmin()
-      if (!admin) {
-        throw new Error('Service role non configurata: impossibile leggere lo staff con le RLS attuali')
-      }
-
-      const { data, error } = await admin
+      // Try with normal client first (works if RLS policies allow)
+      const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('restaurant_id', restId)
         .in('role', ['restaurant_manager', 'staff', 'kitchen'])
         .order('created_at', { ascending: false })
 
-      if (error) throw error
-      setStaff(data || [])
+      if (error) {
+        // If RLS blocks, try with admin client as fallback
+        const admin = getSupabaseAdmin()
+        if (admin) {
+          const { data: adminData, error: adminError } = await admin
+            .from('users')
+            .select('*')
+            .eq('restaurant_id', restId)
+            .in('role', ['restaurant_manager', 'staff', 'kitchen'])
+            .order('created_at', { ascending: false })
+          
+          if (adminError) throw adminError
+          setStaff(adminData || [])
+        } else {
+          throw error
+        }
+      } else {
+        setStaff(data || [])
+      }
     } catch (error: any) {
-      toast.error('Errore nel caricamento dello staff')
-      console.error(error)
+      console.error('Error fetching staff:', error)
+      // Only show toast if it's a real error, not just RLS blocking
+      if (error.message && !error.message.includes('row-level security')) {
+        toast.error('Errore nel caricamento dello staff')
+      }
+      setStaff([])
     } finally {
       setLoading(false)
     }
@@ -70,7 +87,10 @@ export function RestaurantStaff() {
         // Password reset should be handled through Supabase Auth UI or admin panel
 
         const admin = getSupabaseAdmin()
-        if (!admin) throw new Error('Service role non configurata')
+        if (!admin) {
+          toast.error('Operazione non disponibile: service role key non configurata. Configura VITE_SUPABASE_SERVICE_ROLE_KEY per abilitare la gestione utenti.')
+          return
+        }
 
         const { error } = await admin
           .from('users')
@@ -82,7 +102,10 @@ export function RestaurantStaff() {
       } else {
         // Create new user via Admin API
         const admin = getSupabaseAdmin()
-        if (!admin) throw new Error('Service role non configurata')
+        if (!admin) {
+          toast.error('Operazione non disponibile: service role key non configurata. Configura VITE_SUPABASE_SERVICE_ROLE_KEY per abilitare la gestione utenti.')
+          return
+        }
 
         const { data: created, error: createErr } = await admin.auth.admin.createUser({
           email: formData.email,
@@ -128,7 +151,10 @@ export function RestaurantStaff() {
 
     try {
       const admin = getSupabaseAdmin()
-      if (!admin) throw new Error('Service role non configurata')
+      if (!admin) {
+        toast.error('Operazione non disponibile: service role key non configurata. Configura VITE_SUPABASE_SERVICE_ROLE_KEY per abilitare la gestione utenti.')
+        return
+      }
 
       // Delete from users table (profile)
       const { error } = await admin.from('users').delete().eq('id', id)
